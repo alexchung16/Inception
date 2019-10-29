@@ -1,0 +1,305 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# @ File Inception_v1.py
+# @ Description :
+# @ Author alexchung
+# @ Time 29/10/2019 AM 10:29
+
+
+import os
+import numpy as np
+import tensorflow as tf
+import tensorflow.contrib.slim as slim
+
+# # generates a truncated normal distribution
+# trunc_normal = lambda stddev: tf.truncated_normal_initializer(mean=0.0, stddev=stddev)
+
+class InceptionV1():
+    """
+    Inception v1
+    """
+    def __init__(self, input_shape, class_num, batch_size, decay_steps, decay_rate, learning_rate,
+                 keep_prob=0.5):
+        self.n_class = class_num
+        self.batch_size = batch_size
+        self.decay_steps = decay_steps
+        self.decay_rate = decay_rate
+        self.learning_rate = learning_rate
+        # self.optimizer = optimizer
+        self.keep_prob = keep_prob
+        # self.initializer = tf.random_normal_initializer(stddev=0.1)
+        # add placeholder (X,label)
+        self.raw_input_data = tf.placeholder(tf.float32, shape=[None, input_shape[0], input_shape[1], input_shape[2]], name="input_images")
+        # y [None,num_classes]
+        self.raw_input_label = tf.placeholder(tf.float32, shape=[None, self.n_class], name="class_label")
+
+        self.global_step = tf.Variable(0, trainable=False, name="global_step")
+        self.epoch_step = tf.Variable(0, trainable=False, name="epoch_step")
+
+        # # logits
+        # self.logits =  self.inference(input_op=self.raw_input_data, name='inference')
+        # # computer loss value
+        # self.loss = self.losses(labels=self.raw_input_label, logits=self.logits, name='loss')
+        # # train operation
+        # self.train = self.train(self.learning_rate, self.global_step)
+        # self.evaluate_accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
+
+
+    def inference(self, input_op, name):
+       """
+       Inception v1 net structure
+       :param input_op:
+       :param name:
+       :return:
+       """
+       self.prameter = []
+
+
+    def inception_v1(self):
+        pass
+
+    def inception_v1_base(self, inputs, scope='InceptionV1'):
+        """
+        Inception V1 base architecture
+        :return:
+        """
+        with tf.variable_scope(scope, default_name='InceptionV1', values=[inputs]):
+            # conv_7*7*64
+            net = conv2dLayer(input_op=inputs, scope='Conv2d_1a_7x7', filters=64, kernel_size=[7, 7], strides=2)
+
+            # max pool 3*3
+            net = maxPoolLayer(input_op=net, scope='MaxPool_2a_3x3', kernel_size=[3, 3], strides=2)
+            # conv 1*1*64
+            net = conv2dLayer(input_op=net, scope='Conv2d_2b_1x1', filters=64, kernel_size=[1, 1], strides=1)
+            # conv 3*3*192
+            net = conv2dLayer(input_op=net, scope='Conv2d_2c_3x3', filters=192, kernel_size=[3, 3], strides=1)
+
+            # max pool 3*3
+            net = maxPoolLayer(input_op=net, scope='MaxPool_3a_3x3', kernel_size=[3, 3], strides=1)
+            # inception module
+            net = inception_module_v1(input_op=net, scope='Mixed_3b', filters_list=[64, 96, 128, 16, 32, 32])
+            # inception module
+            net = inception_module_v1(input_op=net, scope='Mixed_3c', filters_list=[128, 128, 192, 32, 96, 64])
+            # inception module
+
+            # max pool 3*3
+            net = maxPoolLayer(input_op=net, scope='MaxPool_4a_3x3', kernel_size=[3, 3], strides=1)
+            # inception module
+            net = inception_module_v1(input_op=net, scope='Mixed_4b', filters_list=[192, 92, 208, 16, 48, 64])
+            # inception module
+            net = inception_module_v1(input_op=net, scope='Mixed_4c', filters_list=[160, 112, 224, 24, 64, 64])
+            # inception module
+            net = inception_module_v1(input_op=net, scope='Mixed_4b', filters_list=[128, 128, 256, 24, 64, 64])
+            # inception module
+            net = inception_module_v1(input_op=net, scope='Mixed_4e', filters_list=[112, 144, 288, 32, 64, 64])
+            # inception module
+            net = inception_module_v1(input_op=net, scope='Mixed_4f', filters_list=[256, 160, 320, 32, 128, 128])
+
+            # max pool 2*2
+            net = maxPoolLayer(input_op=net, scope='MaxPool_5a_2x2', kernel_size=[2, 2], strides=1)
+            # inception module
+            net = inception_module_v1(input_op=net, scope='Mixed_5b', filters_list=[256, 160, 320, 32, 128, 128])
+            # inception module
+            net = inception_module_v1(input_op=net, scope='Mixed_5c', filters_list=[384, 192, 384, 48, 128, 128])
+
+            return net
+
+
+def inception_module_v1(input_op, filters_list, scope):
+    """
+    inception module
+    :param net:
+    :param filters_list:[branch_0_filter,
+                    branch_1_filter_0, branch_1_filter_1,
+                    branch_2_filter_0, branch_2_filter_1,
+                    branch_3_filter_0]
+    :param scope:
+    :return:
+    """
+    with tf.variable_scope(scope):
+        # branch0
+        with tf.variable_scope('Branch_0'):
+            branch_0 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', filters=filters_list[0],
+                                 kernel_size=[1, 1], strides=1)
+        # branch 1
+        with tf.variable_scope('Branch_1'):
+            branch_1 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', filters=filters_list[1],
+                                 kernel_size=[1, 1], strides=1)
+            branch_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0b_3x3', filters=filters_list[2],
+                                 kernel_size=[3, 3], strides=1)
+        # branch 2
+        with tf.variable_scope('Branch_2'):
+            branch_2 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', filters=filters_list[3],
+                                 kernel_size=[1, 1], strides=1)
+            branch_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0b_3x3', filters=filters_list[4],
+                                 kernel_size=[3, 3], strides=1)
+        # branch 3
+        with tf.variable_scope('Branch_3'):
+            branch_3 = maxPoolLayer(input_op=input_op, scope='MaxPool_0a_3x3', kernel_size=[3, 3], strides=1)
+            branch_3 = conv2dLayer(input_op=branch_3, scope='Conv2d_0b_3x3', filters=filters_list[5],
+                                 kernel_size=[3, 3], strides=1)
+        # concat
+        output_op = tf.concat(values=[branch_0, branch_1, branch_2, branch_3], axis=3, name='Concat')
+
+    return output_op
+
+
+
+def conv2dLayer(input_op, scope, filters, kernel_size, strides, use_bias=False, padding='SAME', parameter=None):
+    """
+    convolution operation
+    :param input_op:
+    :param scope:
+    :param filters:
+    :param kernel_size:
+    :param strides:
+    :param use_bias:
+    :param padding:
+    :param parameter:
+    :return:
+    """
+    if kernel_size is None:
+        kernel_size = [2, 2]
+    if strides is None:
+        strides = 2
+    # get feature num
+    features = input_op.get_shape()[-1].value
+    with tf.name_scope(scope) as scope:
+        filter = getConvFilter(filter_shape=[kernel_size[0], kernel_size[1], features, filters])
+
+        outputs = tf.nn.conv2d(input=input_op, filter=filter, strides=[1, strides, strides, 1], padding=padding)
+
+        if use_bias:
+            biases = getBias(bias_shape=[filters])
+            outputs = tf.nn.bias_add(value=outputs, bias=biases)
+            parameter += [filter, biases]
+        else:
+            parameter += [filters]
+
+        return tf.nn.relu(outputs)
+
+
+def fcLayer(input_op, scope, filters, parameter):
+    """
+    full connect operation
+    :param input_op:
+    :param scope:
+    :param filters:
+    :param parameter:
+    :return:
+    """
+    # get feature num
+    features = input_op.get_shape()[-1].value
+    with tf.name_scope(scope) as scope:
+        weights = getFCWeight(weight_shape=[features, filters])
+        biases = getBias(bias_shape=[filters])
+        parameter += [weights, biases]
+        return tf.nn.relu_layer(x=input_op, weights=weights, biases=biases)
+
+
+def maxPoolLayer(input_op, scope, kernel_size=None, strides=None, padding='SAME'):
+    """
+     max pooling layer
+    :param input_op:
+    :param scope:
+    :param kernel_size:
+    :param strides_size:
+    :param padding:
+    :return:
+    """
+    with tf.variable_scope(scope) as scope:
+        if kernel_size is None:
+            ksize = [1, 2, 2, 1]
+        else:
+            ksize = [1, kernel_size[0], kernel_size[1], 1]
+        if strides is None:
+            strides = [1, 2, 2, 1]
+        else:
+            strides = [1, strides, strides, 1]
+        return tf.nn.max_pool(value=input_op, ksize=ksize, strides=strides, padding=padding, name='MaxPool')
+
+
+def avgPoolLayer(input_op, scope, kernel_size=None, strides_size=None):
+    """
+    average_pool pooling layer
+    :param input_op:
+    :return:
+    """
+    with tf.variable_scope(scope) as scope:
+        if kernel_size is None:
+            ksize = [1, 2, 2, 1]
+        else:
+            ksize = [1, kernel_size[0], kernel_size[1], 1]
+        if strides_size is None:
+            strides = [1, 2, 2, 1]
+        else:
+            strides = [1, strides_size, strides_size, 1]
+        return tf.nn.avg_pool(value=input_op, ksize=ksize, strides=strides, name='AvgPool')
+
+
+def flatten(input_op, scope):
+    """
+    flatten layer
+    :param input_op:
+    :return:
+    """
+    with tf.variable_scope(scope) as scope:
+        shape = input_op.get_shape().as_list()
+        out_dim = 1
+        for d in shape[1:]:
+            out_dim *= d
+        return tf.reshape(tensor=input_op, shape=[-1, out_dim], name='Flatten')
+
+
+def dropoutLayer(input_op, scope, keep_prob):
+    """
+    dropout regularization layer
+    :param inpu_op:
+    :param name:
+    :param keep_prob:
+    :return:
+    """
+    with tf.variable_scope(scope) as scope:
+        return tf.nn.dropout(input_op, keep_prob=keep_prob, name='Dropout')
+
+
+def softmaxLayer(input_op, scope):
+    """
+    softmax layer
+    :param logits:
+    :param name:
+    :param n_class:
+    :return:
+    """
+    with tf.variable_scope(scope):
+        return tf.nn.softmax(logits=input_op, name='Softmax')
+
+
+def getConvFilter(filter_shape):
+    """
+    convolution layer filter
+    :param filter_shape:
+    :return:
+    """
+    return tf.Variable(initial_value=tf.truncated_normal(shape=filter_shape, mean=0.0, stddev=0.01, dtype=tf.float32),
+                       trainable=True, name='Filter')
+
+
+def getFCWeight(weight_shape):
+    """
+    full connect layer weight
+    :param weight_shape:
+    :return:
+    """
+    return tf.Variable(initial_value=tf.truncated_normal(shape=weight_shape, mean=0.0, stddev=0.01, dtype=tf.float32),
+                       trainable=True, name='Weight')
+
+
+def getBias(bias_shape):
+    return tf.Variable(initial_value=tf.constant(value=0.0, shape=bias_shape, dtype=tf.float32),
+                       trainable=True, name='Bias')
+
+
+
+
+
