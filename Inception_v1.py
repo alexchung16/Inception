@@ -18,20 +18,22 @@ class InceptionV1():
     """
     Inception v1
     """
-    def __init__(self, input_shape, class_num, batch_size, decay_steps, decay_rate, learning_rate,
-                 keep_prob=0.5):
-        self.n_class = class_num
+    def __init__(self, input_shape, num_classes, batch_size, decay_steps, decay_rate, learning_rate,
+                 keep_prob=0.8, global_pool=False, spacial_squeeze=True):
+        self.num_classes = num_classes
         self.batch_size = batch_size
         self.decay_steps = decay_steps
         self.decay_rate = decay_rate
         self.learning_rate = learning_rate
         # self.optimizer = optimizer
         self.keep_prob = keep_prob
+        self.global_pool = global_pool
+        self.spacial_squeeze = spacial_squeeze
         # self.initializer = tf.random_normal_initializer(stddev=0.1)
         # add placeholder (X,label)
         self.raw_input_data = tf.placeholder(tf.float32, shape=[None, input_shape[0], input_shape[1], input_shape[2]], name="input_images")
         # y [None,num_classes]
-        self.raw_input_label = tf.placeholder(tf.float32, shape=[None, self.n_class], name="class_label")
+        self.raw_input_label = tf.placeholder(tf.float32, shape=[None, self.num_classes], name="class_label")
 
         self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.epoch_step = tf.Variable(0, trainable=False, name="epoch_step")
@@ -45,18 +47,53 @@ class InceptionV1():
         # self.evaluate_accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
 
 
-    def inference(self, input_op, name):
+    def inference(self):
        """
-       Inception v1 net structure
+       Inception V1 net structure
        :param input_op:
        :param name:
        :return:
        """
        self.prameter = []
+       prop =  self.inception_v1(inputs = self.raw_input_data,
+                                 num_classes = self.num_classes,
+                                 keep_prob = self.keep_prob,
+                                 global_pool = self.global_pool,
+                                 spatial_squeeze = self.spacial_squeeze
+                                 )
+       return prop
 
 
-    def inception_v1(self):
-        pass
+    def inception_v1(self, inputs, scope='InceptionV1', num_classes=10, keep_prob=0.8, global_pool=False,
+                     spatial_squeeze=True):
+        """
+        Inception V1 architecture
+        :param inputs:
+        :param scope:
+        :param num_class:
+        :param keep_prob:
+        :param global_pool:
+        :param spatial_squeeze:
+        :return:
+        """
+        with tf.variable_scope(scope, default_name='InceptionV1', values=[inputs]) as scope:
+            net = self.inception_v1_base(inputs=inputs, scope=scope)
+            with tf.variable_scope('logits'):
+                if global_pool:
+                    net = tf.reduce_mean(net, [1, 2], keep_dims=True, name='Global_Pool')
+                else:
+                    net = avgPool2dLayer(input_op=net, scope='AvgPool_0a_7x7', kernel_size=[7, 7], strides=1)
+                # dropout
+                net = dropoutLayer(input_op=net, scope='Dropout_0b', keep_prob=keep_prob)
+                # conv layer 1*1*num_class
+                logits = conv2dLayer(input_op=net, scope='Conv2d_0c_1x1', filters=num_classes, kernel_size=[1, 1],
+                                     strides=1)
+
+                if spatial_squeeze:
+                    logits = tf.squeeze(input=logits, axis=[1, 2], name='SpatialSqueeze')
+                prop = softmaxLayer(input_op=logits, scope='Softmax')
+        return prop
+
 
     def inception_v1_base(self, inputs, scope='InceptionV1'):
         """
@@ -68,14 +105,14 @@ class InceptionV1():
             net = conv2dLayer(input_op=inputs, scope='Conv2d_1a_7x7', filters=64, kernel_size=[7, 7], strides=2)
 
             # max pool 3*3
-            net = maxPoolLayer(input_op=net, scope='MaxPool_2a_3x3', kernel_size=[3, 3], strides=2)
+            net = maxPool2dLayer(input_op=net, scope='MaxPool_2a_3x3', kernel_size=[3, 3], strides=2)
             # conv 1*1*64
             net = conv2dLayer(input_op=net, scope='Conv2d_2b_1x1', filters=64, kernel_size=[1, 1], strides=1)
             # conv 3*3*192
             net = conv2dLayer(input_op=net, scope='Conv2d_2c_3x3', filters=192, kernel_size=[3, 3], strides=1)
 
             # max pool 3*3
-            net = maxPoolLayer(input_op=net, scope='MaxPool_3a_3x3', kernel_size=[3, 3], strides=1)
+            net = maxPool2dLayer(input_op=net, scope='MaxPool_3a_3x3', kernel_size=[3, 3], strides=1)
             # inception module
             net = inception_module_v1(input_op=net, scope='Mixed_3b', filters_list=[64, 96, 128, 16, 32, 32])
             # inception module
@@ -83,7 +120,7 @@ class InceptionV1():
             # inception module
 
             # max pool 3*3
-            net = maxPoolLayer(input_op=net, scope='MaxPool_4a_3x3', kernel_size=[3, 3], strides=1)
+            net = maxPool2dLayer(input_op=net, scope='MaxPool_4a_3x3', kernel_size=[3, 3], strides=1)
             # inception module
             net = inception_module_v1(input_op=net, scope='Mixed_4b', filters_list=[192, 92, 208, 16, 48, 64])
             # inception module
@@ -96,7 +133,7 @@ class InceptionV1():
             net = inception_module_v1(input_op=net, scope='Mixed_4f', filters_list=[256, 160, 320, 32, 128, 128])
 
             # max pool 2*2
-            net = maxPoolLayer(input_op=net, scope='MaxPool_5a_2x2', kernel_size=[2, 2], strides=1)
+            net = maxPool2dLayer(input_op=net, scope='MaxPool_5a_2x2', kernel_size=[2, 2], strides=1)
             # inception module
             net = inception_module_v1(input_op=net, scope='Mixed_5b', filters_list=[256, 160, 320, 32, 128, 128])
             # inception module
@@ -135,7 +172,7 @@ def inception_module_v1(input_op, filters_list, scope):
                                  kernel_size=[3, 3], strides=1)
         # branch 3
         with tf.variable_scope('Branch_3'):
-            branch_3 = maxPoolLayer(input_op=input_op, scope='MaxPool_0a_3x3', kernel_size=[3, 3], strides=1)
+            branch_3 = maxPool2dLayer(input_op=input_op, scope='MaxPool_0a_3x3', kernel_size=[3, 3], strides=1)
             branch_3 = conv2dLayer(input_op=branch_3, scope='Conv2d_0b_3x3', filters=filters_list[5],
                                  kernel_size=[3, 3], strides=1)
         # concat
@@ -197,7 +234,7 @@ def fcLayer(input_op, scope, filters, parameter):
         return tf.nn.relu_layer(x=input_op, weights=weights, biases=biases)
 
 
-def maxPoolLayer(input_op, scope, kernel_size=None, strides=None, padding='SAME'):
+def maxPool2dLayer(input_op, scope, kernel_size=None, strides=None, padding='SAME'):
     """
      max pooling layer
     :param input_op:
@@ -219,7 +256,7 @@ def maxPoolLayer(input_op, scope, kernel_size=None, strides=None, padding='SAME'
         return tf.nn.max_pool(value=input_op, ksize=ksize, strides=strides, padding=padding, name='MaxPool')
 
 
-def avgPoolLayer(input_op, scope, kernel_size=None, strides_size=None):
+def avgPool2dLayer(input_op, scope, kernel_size=None, strides=None):
     """
     average_pool pooling layer
     :param input_op:
@@ -230,10 +267,10 @@ def avgPoolLayer(input_op, scope, kernel_size=None, strides_size=None):
             ksize = [1, 2, 2, 1]
         else:
             ksize = [1, kernel_size[0], kernel_size[1], 1]
-        if strides_size is None:
+        if strides is None:
             strides = [1, 2, 2, 1]
         else:
-            strides = [1, strides_size, strides_size, 1]
+            strides = [1, strides, strides, 1]
         return tf.nn.avg_pool(value=input_op, ksize=ksize, strides=strides, name='AvgPool')
 
 
