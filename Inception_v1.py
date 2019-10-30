@@ -9,7 +9,6 @@
 import os
 import numpy as np
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
 
 # # generates a truncated normal distribution
 # trunc_normal = lambda stddev: tf.truncated_normal_initializer(mean=0.0, stddev=stddev)
