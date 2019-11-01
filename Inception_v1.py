@@ -10,6 +10,8 @@ import os
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
+
+
 # # generates a truncated normal distribution
 # trunc_normal = lambda stddev: tf.random.truncated_normal _initializer(mean=0.0, stddev=stddev)
 
@@ -33,19 +35,19 @@ class InceptionV1():
         # y [None,num_classes]
         self.raw_input_label = tf.compat.v1.placeholder (tf.float32, shape=[None, self.num_classes], name="class_label")
 
-        self.global_step = tf.Variable(0, trainable=False, name="global_step")
-        self.epoch_step = tf.Variable(0, trainable=False, name="epoch_step")
+        self.global_step = tf.Variable(0, trainable=False, name="Global_Step")
+        self.epoch_step = tf.Variable(0, trainable=False, name="Epoch_Step")
 
         # logits
-        self.logits =  self.inference(self.raw_input_data)
+        self.logits =  self.inference(self.raw_input_data, scope='InceptionV1')
         # # computer loss value
-        # self.loss = self.losses(labels=self.raw_input_label, logits=self.logits, name='loss')
-        # # train operation
-        # self.train = self.train(self.learning_rate, self.global_step)
-        # self.evaluate_accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
+        self.loss = self.losses(labels=self.raw_input_label, logits=self.logits, scope='Loss')
+        # train operation
+        self.train = self.training(self.learning_rate, self.global_step, loss=self.loss)
+        self.evaluate_accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
 
 
-    def inference(self, inputs):
+    def inference(self, inputs, scope='InceptionV1'):
        """
        Inception V1 net structure
        :param input_op:
@@ -57,7 +59,8 @@ class InceptionV1():
                                  num_classes = self.num_classes,
                                  keep_prob = self.keep_prob,
                                  global_pool = self.global_pool,
-                                 spatial_squeeze = self.spacial_squeeze
+                                 spatial_squeeze = self.spacial_squeeze,
+                                 scope=scope
                                  )
        return prop
 
@@ -90,7 +93,7 @@ class InceptionV1():
                 if spatial_squeeze:
                     logits = tf.squeeze(input=logits, axis=[1, 2], name='SpatialSqueeze')
                 prop = softmaxLayer(input_op=logits, scope='Softmax')
-        return logits
+        return prop
 
 
     def inception_v1_base(self, inputs, scope='InceptionV1'):
@@ -139,6 +142,41 @@ class InceptionV1():
 
             return net
 
+    def training(self, learnRate, globalStep, loss):
+        """
+        train operation
+        :param learnRate:
+        :param globalStep:
+        :param args:
+        :return:
+        """
+        learning_rate = tf.train.exponential_decay(learning_rate=learnRate, global_step=globalStep,
+                                                   decay_steps=self.decay_steps, decay_rate=self.decay_rate,
+                                                   staircase=False)
+        return tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=globalStep)
+
+    def losses(self, logits, labels, scope='Loss'):
+        """
+        loss function
+        :param logits:
+        :param labels:
+        :return:
+        """
+        with tf.name_scope(scope) as scope:
+            cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=labels, logits=logits, name='Entropy')
+            return tf.reduce_mean(input_tensor=cross_entropy, name='Entropy_Mean')
+
+    def evaluate_batch(self, logits, labels, scope='Evaluate_Batch'):
+        """
+        evaluate one batch correct num
+        :param logits:
+        :param label:
+        :return:
+        """
+        with tf.name_scope(scope):
+            correct_predict = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
+            return tf.reduce_sum(tf.cast(correct_predict, dtype=tf.float32))
+
     def fill_feed_dict(self, image_feed, label_feed):
         feed_dict = {
             self.raw_input_data: image_feed,
@@ -186,9 +224,6 @@ def inception_module_v1(input_op, filters_list, scope):
     return output_op
 
 
-
-
-
 def conv2dLayer(input_op, scope, filters, kernel_size, strides, use_bias=False, padding='SAME', parameter=None):
     """
     convolution operation
@@ -203,7 +238,7 @@ def conv2dLayer(input_op, scope, filters, kernel_size, strides, use_bias=False, 
     :return:
     """
     if kernel_size is None:
-        kernel_size = [2, 2]
+        kernel_size = [3, 3]
     if strides is None:
         strides = 2
     # get feature num
@@ -223,20 +258,20 @@ def conv2dLayer(input_op, scope, filters, kernel_size, strides, use_bias=False, 
         return tf.nn.relu(outputs)
 
 
-def fcLayer(input_op, scope, filters, parameter):
+def fcLayer(input_op, scope, num_outputs, parameter=None):
     """
-    full connect operation
+     full connect operation
     :param input_op:
     :param scope:
-    :param filters:
+    :param num_outputs:
     :param parameter:
     :return:
     """
     # get feature num
     features = input_op.get_shape()[-1].value
     with tf.name_scope(scope) as scope:
-        weights = getFCWeight(weight_shape=[features, filters])
-        biases = getBias(bias_shape=[filters])
+        weights = getFCWeight(weight_shape=[features, num_outputs])
+        biases = getBias(bias_shape=[num_outputs])
         # parameter += [weights, biases]
         return tf.nn.relu_layer(x=input_op, weights=weights, biases=biases)
 
@@ -325,7 +360,7 @@ def getConvFilter(filter_shape):
     :param filter_shape:
     :return:
     """
-    return tf.Variable(initial_value=tf.random.truncated_normal(shape=filter_shape, mean=0.0, stddev=0.01, dtype=tf.float32),
+    return tf.Variable(initial_value=tf.random.truncated_normal(shape=filter_shape, mean=0.0, stddev=1e-1, dtype=tf.float32),
                        trainable=True, name='Filter')
 
 
@@ -335,14 +370,18 @@ def getFCWeight(weight_shape):
     :param weight_shape:
     :return:
     """
-    return tf.Variable(initial_value=tf.random.truncated_normal(shape=weight_shape, mean=0.0, stddev=0.01, dtype=tf.float32),
+    return tf.Variable(initial_value=tf.random.truncated_normal(shape=weight_shape, mean=0.0, stddev=1e-1, dtype=tf.float32),
                        trainable=True, name='Weight')
 
 
 def getBias(bias_shape):
+    """
+    get bias
+    :param bias_shape:
+    :return:
+    """
     return tf.Variable(initial_value=tf.constant(value=0.0, shape=bias_shape, dtype=tf.float32),
                        trainable=True, name='Bias')
-
 
 
 
