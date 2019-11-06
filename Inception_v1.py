@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # @ File Inception_v1.py
-# @ Description :
+# @ Description : GoogLeNet
 # @ Author alexchung
 # @ Time 29/10/2019 AM 10:29
 
@@ -115,32 +115,70 @@ class InceptionV1():
             # max pool 3*3
             net = maxPool2dLayer(input_op=net, scope='MaxPool_3a_3x3', kernel_size=[3, 3], strides=2)
             # inception module
-            net = inception_module_v1(input_op=net, scope='Mixed_3b', filters_list=[64, 96, 128, 16, 32, 32])
+            net = self.inception_module_v1(input_op=net, scope='Mixed_3b', filters_list=[64, 96, 128, 16, 32, 32])
             # inception module
-            net = inception_module_v1(input_op=net, scope='Mixed_3c', filters_list=[128, 128, 192, 32, 96, 64])
+            net = self.inception_module_v1(input_op=net, scope='Mixed_3c', filters_list=[128, 128, 192, 32, 96, 64])
             # inception module
 
             # max pool 3*3
             net = maxPool2dLayer(input_op=net, scope='MaxPool_4a_3x3', kernel_size=[3, 3], strides=2)
             # inception module
-            net = inception_module_v1(input_op=net, scope='Mixed_4b', filters_list=[192, 92, 208, 16, 48, 64])
+            net = self.inception_module_v1(input_op=net, scope='Mixed_4b', filters_list=[192, 92, 208, 16, 48, 64])
             # inception module
-            net = inception_module_v1(input_op=net, scope='Mixed_4c', filters_list=[160, 112, 224, 24, 64, 64])
+            net = self.inception_module_v1(input_op=net, scope='Mixed_4c', filters_list=[160, 112, 224, 24, 64, 64])
             # inception module
-            net = inception_module_v1(input_op=net, scope='Mixed_4b', filters_list=[128, 128, 256, 24, 64, 64])
+            net = self.inception_module_v1(input_op=net, scope='Mixed_4b', filters_list=[128, 128, 256, 24, 64, 64])
             # inception module
-            net = inception_module_v1(input_op=net, scope='Mixed_4e', filters_list=[112, 144, 288, 32, 64, 64])
+            net = self.inception_module_v1(input_op=net, scope='Mixed_4e', filters_list=[112, 144, 288, 32, 64, 64])
             # inception module
-            net = inception_module_v1(input_op=net, scope='Mixed_4f', filters_list=[256, 160, 320, 32, 128, 128])
+            net = self.inception_module_v1(input_op=net, scope='Mixed_4f', filters_list=[256, 160, 320, 32, 128, 128])
 
             # max pool 2*2
             net = maxPool2dLayer(input_op=net, scope='MaxPool_5a_2x2', kernel_size=[2, 2], strides=2)
             # inception module
-            net = inception_module_v1(input_op=net, scope='Mixed_5b', filters_list=[256, 160, 320, 32, 128, 128])
+            net = self.inception_module_v1(input_op=net, scope='Mixed_5b', filters_list=[256, 160, 320, 32, 128, 128])
             # inception module
-            net = inception_module_v1(input_op=net, scope='Mixed_5c', filters_list=[384, 192, 384, 48, 128, 128])
+            net = self.inception_module_v1(input_op=net, scope='Mixed_5c', filters_list=[384, 192, 384, 48, 128, 128])
 
             return net
+
+    def inception_module_v1(self, input_op, filters_list, scope):
+        """
+        inception module
+        :param net:
+        :param filters_list:[branch_0_filter,
+                        branch_1_filter_0, branch_1_filter_1,
+                        branch_2_filter_0, branch_2_filter_1,
+                        branch_3_filter_0]
+        :param scope:
+        :return:
+        """
+        with tf.compat.v1.variable_scope(scope):
+            # branch0
+            with tf.compat.v1.variable_scope('Branch_0'):
+                branch_0 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', filters=filters_list[0],
+                                       kernel_size=[1, 1], strides=1)
+            # branch 1
+            with tf.compat.v1.variable_scope('Branch_1'):
+                branch_1 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', filters=filters_list[1],
+                                       kernel_size=[1, 1], strides=1)
+                branch_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0b_3x3', filters=filters_list[2],
+                                       kernel_size=[3, 3], strides=1)
+            # branch 2
+            with tf.compat.v1.variable_scope('Branch_2'):
+                branch_2 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', filters=filters_list[3],
+                                       kernel_size=[1, 1], strides=1)
+                branch_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0b_3x3', filters=filters_list[4],
+                                       kernel_size=[3, 3], strides=1)
+            # branch 3
+            with tf.compat.v1.variable_scope('Branch_3'):
+                branch_3 = maxPool2dLayer(input_op=input_op, scope='MaxPool_0a_3x3', kernel_size=[3, 3], strides=1)
+                branch_3 = conv2dLayer(input_op=branch_3, scope='Conv2d_0b_3x3', filters=filters_list[5],
+                                       kernel_size=[3, 3], strides=1)
+            # concat branch
+            output_op = tf.concat(values=[branch_0, branch_1, branch_2, branch_3], axis=3, name='Concat')
+
+        return output_op
 
     def training(self, learnRate, globalStep, loss):
         """
@@ -183,45 +221,6 @@ class InceptionV1():
             self.raw_input_label: label_feed
         }
         return feed_dict
-
-
-def inception_module_v1(input_op, filters_list, scope):
-    """
-    inception module
-    :param net:
-    :param filters_list:[branch_0_filter,
-                    branch_1_filter_0, branch_1_filter_1,
-                    branch_2_filter_0, branch_2_filter_1,
-                    branch_3_filter_0]
-    :param scope:
-    :return:
-    """
-    with tf.compat.v1.variable_scope(scope):
-        # branch0
-        with tf.compat.v1.variable_scope('Branch_0'):
-            branch_0 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', filters=filters_list[0],
-                                 kernel_size=[1, 1], strides=1)
-        # branch 1
-        with tf.compat.v1.variable_scope('Branch_1'):
-            branch_1 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', filters=filters_list[1],
-                                 kernel_size=[1, 1], strides=1)
-            branch_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0b_3x3', filters=filters_list[2],
-                                 kernel_size=[3, 3], strides=1)
-        # branch 2
-        with tf.compat.v1.variable_scope('Branch_2'):
-            branch_2 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', filters=filters_list[3],
-                                 kernel_size=[1, 1], strides=1)
-            branch_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0b_3x3', filters=filters_list[4],
-                                 kernel_size=[3, 3], strides=1)
-        # branch 3
-        with tf.compat.v1.variable_scope('Branch_3'):
-            branch_3 = maxPool2dLayer(input_op=input_op, scope='MaxPool_0a_3x3', kernel_size=[3, 3], strides=1)
-            branch_3 = conv2dLayer(input_op=branch_3, scope='Conv2d_0b_3x3', filters=filters_list[5],
-                                 kernel_size=[3, 3], strides=1)
-        # concat branch
-        output_op = tf.concat(values=[branch_0, branch_1, branch_2, branch_3], axis=3, name='Concat')
-
-    return output_op
 
 
 def conv2dLayer(input_op, scope, filters, kernel_size, strides, use_bias=False, padding='SAME', parameter=None):
