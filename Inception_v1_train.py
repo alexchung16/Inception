@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @ File Inception_v1_test.py
+# @ File Inception_v1_train.py
 # @ Description :
 # @ Author alexchung
 # @ Time 29/10/2019 PM 13:50
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     # train and save model
     sess = tf.Session()
     with sess.as_default():
-        images, labels = read_tfrecord(record_file=record_file, batch_size=BATCH_SIZE)
+        images, labels, filename= read_tfrecord(record_file=record_file, batch_size=BATCH_SIZE, input_shape=DATA_SHAPE)
         init_op = tf.group(
             tf.global_variables_initializer(),
             tf.local_variables_initializer()
