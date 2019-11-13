@@ -7,22 +7,41 @@
 
 
 import os
-import cv2 as cv
-import matplotlib.pyplot as plt
-import tensorflow as tf
-from Inception.Inception_v3 import InceptionV3
 import numpy as np
-from TFRecordProcessing.parse_TFRecord import read_tfrecord
+import tensorflow as tf
+# from Inception.Inception_v3 import InceptionV3
+from Inception.Inception_v3_slim import InceptionV3
+from TFRecordProcessing.parse_TFRecord import reader_tfrecord, get_num_samples
 from tensorflow.python.framework import graph_util
-
-original_dataset_dir = '/home/alex/Documents/datasets/dogs_and_cat_separate'
+#
+original_dataset_dir = '/home/alex/Documents/datasets/dogs_vs_cat_separate'
 tfrecord_dir = os.path.join(original_dataset_dir, 'tfrecord')
 
 train_path = os.path.join(original_dataset_dir, 'train')
 test_path = os.path.join(original_dataset_dir, 'test')
 record_file = os.path.join(tfrecord_dir, 'image.tfrecords')
 model_path = os.path.join(os.getcwd(), 'model')
-model_name = os.path.join(model_path, 'inception_v1.pb')
+model_name = os.path.join(model_path, 'inception_v3.pb')
+pretrain_model_dir = '/home/alex/Documents/pretraing_model/vgg16/vgg16.ckpt'
+
+flags = tf.app.flags
+FLAGS = flags.FLAGS
+flags.DEFINE_integer('height', 299, 'Number of height size.')
+flags.DEFINE_integer('width', 299, 'Number of width size.')
+flags.DEFINE_integer('depth', 3, 'Number of depth size.')
+flags.DEFINE_integer('num_classes', 2, 'Number of image class.')
+flags.DEFINE_integer('epoch', 30, 'Number of epoch size.')
+flags.DEFINE_integer('step_per_epoch', 100, 'Number of step size of per epoch.')
+flags.DEFINE_float('learning_rate', 1e-3, 'Initial learning rate.')
+flags.DEFINE_float('decay_rate', 0.99, 'Number of learning decay rate.')
+flags.DEFINE_bool('global_pool', False, 'if True, use global pool.')
+flags.DEFINE_bool('spacial_squeeze', True, 'if True, execute squeeze.')
+flags.DEFINE_integer('num_epoch_per_decay', 2, 'Number epoch after each leaning rate decapy.')
+flags.DEFINE_float('keep_prob', 0.8, 'Number of probability that each element is kept.')
+flags.DEFINE_string('train_dir', record_file, 'Directory to put the training data.')
+flags.DEFINE_bool('is_pretrain', True, 'if True, use pretrain model.')
+flags.DEFINE_string('pretrain_model_dir', pretrain_model_dir, 'pretrain model dir.')
+
 
 
 def predict(model_name, image_data, input_op_name, predict_op_name):
@@ -58,9 +77,9 @@ def predict(model_name, image_data, input_op_name, predict_op_name):
 
 
 # test build network
-def testBuildClissificationNetWork():
-    inputs = tf.random_uniform(shape=(BATCH_SIZE, DATA_SHAPE[0], DATA_SHAPE[1], DATA_SHAPE[2]))
-    labels = tf.random_uniform(shape=(BATCH_SIZE, NUM_CLASS))
+def networkStructureTest(batch_size):
+    inputs = tf.random_uniform(shape=(batch_size, FLAGS.height, FLAGS.width, FLAGS.depth))
+    labels = tf.random_uniform(shape=(batch_size, FLAGS.num_classes))
 
     with tf.Session() as sess:
         init_op = tf.group(
@@ -73,58 +92,70 @@ def testBuildClissificationNetWork():
         feed_dict = inception_v3.fill_feed_dict(image_feed=inputs, label_feed=labels, is_training=True)
 
         logits = sess.run(fetches=[inception_v3.logits], feed_dict=feed_dict)
-        assert list(logits[0].shape) == [BATCH_SIZE, NUM_CLASS]
+        assert list(logits[0].shape) == [batch_size, FLAGS.num_classes]
 
-
-
+#
+#
 if __name__ == "__main__":
-    DATA_SHAPE = [299, 299, 3]
-    NUM_CLASS = 2
-    BATCH_SIZE = 100
-    STEP_NUM = 30
-    DECAY_STEPS = 100
-    DECAY_RATE = 0.99
-    LEARNING_RATE = 1e-4
-    KEEP_PROB = 0.8
     GLOBAL_POOL = False
     SPACIAL_SQUEEZE = True
-    inception_v3 = InceptionV3(input_shape=DATA_SHAPE, num_classes=NUM_CLASS, batch_size=BATCH_SIZE, decay_rate=DECAY_RATE,
-                      decay_steps=DECAY_STEPS, learning_rate=LEARNING_RATE, keep_prob=KEEP_PROB,
-                      global_pool=GLOBAL_POOL, spacial_squeeze=SPACIAL_SQUEEZE)
+
+    num_samples = get_num_samples(record_file=FLAGS.train_dir)
+    batch_size = num_samples // FLAGS.step_per_epoch
+
+    inception_v3 = InceptionV3(input_shape=[FLAGS.height, FLAGS.width, FLAGS.depth],
+                               num_classes=FLAGS.num_classes,
+                               batch_size=batch_size, 
+                               decay_rate=FLAGS.decay_rate,
+                               learning_rate=FLAGS.learning_rate,
+                               num_samples_per_epoch=num_samples,
+                               num_epoch_per_decay=FLAGS.num_epoch_per_decay,
+                               keep_prob=FLAGS.keep_prob,
+                               global_pool=FLAGS.global_pool,
+                               spacial_squeeze=FLAGS.spacial_squeeze)
 
     input_op = inception_v3.raw_input_data.name
     logit_op = inception_v3.logits.name
 
-    # testBuildClissificationNetWork()
-
+    networkStructureTest(batch_size=batch_size)
 
     # train and save model
     sess = tf.Session()
     with sess.as_default():
-        images, labels, filename= read_tfrecord(record_file=record_file, batch_size=BATCH_SIZE, input_shape=DATA_SHAPE)
+        images, labels, filenames = reader_tfrecord(record_file=FLAGS.train_dir,
+                                                    batch_size=batch_size,
+                                                    input_shape=[FLAGS.height, FLAGS.width, FLAGS.depth],
+                                                    class_depth=FLAGS.num_classes,
+                                                    epoch=FLAGS.epoch,
+                                                    shuffle=False)
         init_op = tf.group(
             tf.global_variables_initializer(),
             tf.local_variables_initializer()
         )
         sess.run(init_op)
         coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners()
+        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         try:
             if not coord.should_stop():
-                for epoch in range(STEP_NUM):
-                    image, label = sess.run([images, labels])
+                for epoch in range(FLAGS.epoch):
+                    print('Epoch: {0}/{1}'.format(epoch, FLAGS.epoch))
+                    for step in range(FLAGS.step_per_epoch):
 
-                    feed_dict = inception_v3.fill_feed_dict(image_feed=image, label_feed=label, is_training=True)
+                        image, label, filename = sess.run([images, labels, filenames])
 
-                    _, loss_value, train_accuracy, logits= sess.run(fetches=[inception_v3.train,
-                                                                      inception_v3.loss,
-                                                                      inception_v3.evaluate_accuracy, inception_v3.logits],
-                                                             feed_dict=feed_dict)
-                    # print(logits)
-                    print('step {0}:loss value {1}  train accuracy {2}'.format(epoch, loss_value, train_accuracy))
+                        feed_dict = inception_v3.fill_feed_dict(image_feed=image,
+                                                                label_feed=label,
+                                                                is_training=True)
+
+                        _, loss_value, train_accuracy = sess.run(
+                            fetches=[inception_v3.train, inception_v3.loss, inception_v3.evaluate_accuracy],
+                            feed_dict=feed_dict)
+
+                        print('  Step {0}/{1}: loss value {2}  train accuracy {3}'
+                              .format(step, FLAGS.step_per_epoch, loss_value, train_accuracy))
 
                 # convert variable to constant
-                input_graph_def = tf.get_default_graph().as_graph_def()
+                # input_graph_def = tf.get_default_graph().as_graph_def()
 
                 # constant_graph = tf.graph_util.convert_variables_to_constants(sess, input_graph_def,
                 #                                                               [input_op.split(':')[0],
@@ -136,6 +167,7 @@ if __name__ == "__main__":
         except Exception as e:
             print(e)
         coord.request_stop()
-        coord.join(threads)
+    coord.join(threads)
     sess.close()
     print('model training has complete')
+
