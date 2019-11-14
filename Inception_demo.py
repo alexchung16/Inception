@@ -9,6 +9,8 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from tensorflow.contrib.slim.python.slim.nets import inception_v3
+pretrain_model_dir = '/home/alex/Documents/pretraing_model/Inception/inception_v3/inception_v3.ckpt'
+
 
 images = tf.Variable(initial_value=tf.random_uniform(shape=(5, 299, 299, 3), minval=0, maxval=3), dtype=tf.float32)
 class_num = tf.constant(value=5, dtype=tf.int32)
@@ -30,4 +32,28 @@ if __name__ == "__main__":
         sess.run(init)
         for var in tf.model_variables():
             print(var.name)
+
+        # exclusion scope
+        exclude_variable = ['InceptionV3/Logits',
+                      'InceptionV3/AuxLogits']
+
+        variable = slim.get_variables_to_restore(exclude=exclude_variable)
+        # assign specific variables from a checkpoint
+        assign_op, feed_dict = slim.assign_from_checkpoint(model_path=pretrain_model_dir, var_list=variable,
+                                                           ignore_missing_vars=True)
+
+        for tensor, slice_value in feed_dict.items():
+            print(tensor)
+            # print(slice_value)
+
+        # get an function witch can assigns specific variables from checkpoint
+        assign_fn =slim.assign_from_checkpoint_fn(model_path=pretrain_model_dir, var_list=variable,
+                                                  ignore_missing_vars=True)
+        # restore variable to sess
+        assign_fn(sess)
+        print(sess.run('InceptionV3/Conv2d_1a_3x3/weights:0'))
+
+
+
+
 
