@@ -14,7 +14,7 @@ from Inception.Inception_v3_slim import InceptionV3
 from TFRecordProcessing.parse_TFRecord import reader_tfrecord, get_num_samples
 from tensorflow.python.framework import graph_util
 #
-original_dataset_dir = '/home/alex/Documents/datasets/dogs_vs_cat_separate'
+original_dataset_dir = '/home/alex/Documents/datasets/flower_photos_separate'
 tfrecord_dir = os.path.join(original_dataset_dir, 'tfrecord')
 
 train_path = os.path.join(original_dataset_dir, 'train')
@@ -30,8 +30,8 @@ FLAGS = flags.FLAGS
 flags.DEFINE_integer('height', 299, 'Number of height size.')
 flags.DEFINE_integer('width', 299, 'Number of width size.')
 flags.DEFINE_integer('depth', 3, 'Number of depth size.')
-flags.DEFINE_integer('num_classes', 2, 'Number of image class.')
-flags.DEFINE_integer('epoch', 1, 'Number of epoch size.')
+flags.DEFINE_integer('num_classes', 5, 'Number of image class.')
+flags.DEFINE_integer('epoch', 30, 'Number of epoch size.')
 flags.DEFINE_integer('step_per_epoch', 100, 'Number of step size of per epoch.')
 flags.DEFINE_float('learning_rate', 1e-3, 'Initial learning rate.')
 flags.DEFINE_float('decay_rate', 0.99, 'Number of learning decay rate.')
@@ -115,9 +115,7 @@ if __name__ == "__main__":
                                global_pool=FLAGS.global_pool,
                                spacial_squeeze=FLAGS.spacial_squeeze)
 
-    input_op = inception_v3.raw_input_data.name
-    # is_train = inception_v3.is_training
-    logit_op = inception_v3.logits.name
+
 
     # add scalar value to summary protocol buffer
     tf.summary.scalar('loss', inception_v3.loss)
@@ -187,7 +185,10 @@ if __name__ == "__main__":
                         write.add_summary(summary=summary, global_step=epoch*FLAGS.step_per_epoch+step)
                 write.close()
 
-
+                # save model
+                # get op name for save model
+                input_op = inception_v3.raw_input_data.name
+                logit_op = inception_v3.logits.name
                 # convert variable to constant
                 def_graph = tf.get_default_graph().as_graph_def()
                 constant_graph = tf.graph_util.convert_variables_to_constants(sess, def_graph,
