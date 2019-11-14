@@ -44,7 +44,7 @@ class InceptionV3():
     Inception v1
     """
     def __init__(self, input_shape, num_classes, batch_size, decay_steps, decay_rate, learning_rate,
-                 keep_prob=0.8, global_pool=False, spacial_squeeze=True):
+                 keep_prob=0.8, global_pool=False, spacial_squeeze=True, reuse=tf.AUTO_REUSE):
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.decay_steps = decay_steps
@@ -53,11 +53,14 @@ class InceptionV3():
         self.keep_prob = keep_prob
         self.global_pool = global_pool
         self.spacial_squeeze = spacial_squeeze
+        self.reuse = reuse
+
         # self.initializer = tf.random_normal_initializer(stddev=0.1)
         # add placeholder (X,label)
         self.raw_input_data = tf.compat.v1.placeholder (tf.float32, shape=[None, input_shape[0], input_shape[1], input_shape[2]], name="input_images")
         # y [None,num_classes]
         self.raw_input_label = tf.compat.v1.placeholder (tf.float32, shape=[None, self.num_classes], name="class_label")
+        self.is_training = tf.compat.v1.placeholder_with_default(input=False, shape=(), name='is_training')
 
         self.global_step = tf.Variable(0, trainable=False, name="Global_Step")
         self.epoch_step = tf.Variable(0, trainable=False, name="Epoch_Step")
@@ -78,15 +81,24 @@ class InceptionV3():
         :param scope:
         :return:
         """
-        pass
+        self.prameter = []
+        prop = self.inception_v3(inputs=inputs,
+                                 num_classes=self.num_classes,
+                                 keep_prob=self.keep_prob,
+                                 global_pool=self.global_pool,
+                                 spatial_squeeze=self.spacial_squeeze,
+                                 reuse = self.reuse,
+                                 scope=scope
 
+                                 )
+        return prop
     def inception_v3(self, inputs, scope='InceptionV3', num_classes=10, keep_prob=0.8, global_pool=False,
                      spatial_squeeze=True, reuse=None, create_aux_logits=True):
         """
         inception v3
         :return:
         """
-        with tf.compat.v1.variable_scope(scope, default_name='InceptionV3', values=[inputs]) as scope:
+        with tf.compat.v1.variable_scope(scope, default_name='InceptionV3', values=[inputs], reuse=reuse) as scope:
             # 8 x 8 x 2048 17 x 17 x 768
             net, aux_net = self.inception_v3_base(inputs=inputs, scope=scope)
         if create_aux_logits and num_classes:
@@ -95,15 +107,15 @@ class InceptionV3():
                 aux_logits = avgPool2dLayer(input_op=aux_net, scope='AvgPool_1a_5x5', kernel_size=[5 ,5],
                                             strides=3, padding='VALID')
                 # 5 x 5 x 768
-                aux_logits = conv2dLayer(input_op=aux_logits, scope='Conv2d_1b_1x1', kernel_size=[1, 1],
+                aux_logits = self.conv2dLayer(input_op=aux_logits, scope='Conv2d_1b_1x1', kernel_size=[1, 1],
                                          filters=128, strides=1, padding='SAME')
-                # 1 x 1 x 128
+                # 5 x 5 x 128
                 kernel_size = self.reduce_kernel_size(input_op=aux_logits, kernel_size=[5, 5])
-                aux_logits = conv2dLayer(input_op=aux_logits, scope='Conv2d_2b_{}x{}'.format(*kernel_size),
+                aux_logits = self.conv2dLayer(input_op=aux_logits, scope='Conv2d_2b_{}x{}'.format(*kernel_size),
                                          kernel_size=kernel_size, weight_mean=1e-2, filters=768, strides=1,
                                          padding='VALID')
                 # 1 X 1 X 768
-                aux_logits = conv2dLayer(input_op=aux_logits, scope='Conv2d_2b_1x1', kernel_size=kernel_size,
+                aux_logits = self.conv2dLayer(input_op=aux_logits, scope='Conv2d_2b_1x1', kernel_size=[1, 1],
                                          weight_mean=1e-3, filters=num_classes, strides=1,
                                          padding='VALID')
                 if spatial_squeeze:
@@ -121,14 +133,14 @@ class InceptionV3():
             # dropout
             net = dropoutLayer(input_op=net, scope='Dropout_0b', keep_prob=keep_prob)
             # conv layer 1*1*num_class
-            logits = conv2dLayer(input_op=net, scope='Conv2d_0c_1x1', filters=num_classes, kernel_size=[1, 1],
+            logits = self.conv2dLayer(input_op=net, scope='Conv2d_0c_1x1', filters=num_classes, kernel_size=[1, 1],
                                  strides=1)
 
             if spatial_squeeze:
                 logits = tf.squeeze(input=logits, axis=[1, 2], name='SpatialSqueeze')
             prop = softmaxLayer(input_op=logits, scope='Softmax')
 
-        return prop, aux_logits
+        return prop
 
 
 
@@ -155,27 +167,27 @@ class InceptionV3():
         :param scope:
         :return:
         """
-        with tf.compat.v1.variable_scope(scope, default_name='InceptionV1', values=[inputs]):
-            # 229 x 229 x 3
-            net = conv2dLayer(input_op=inputs, scope='Conv2d_1a_3x3', kernel_size=[3, 3],
+        with tf.compat.v1.variable_scope(scope, default_name='InceptionV3', values=[inputs]):
+            # 299 x 299 x 3
+            net = self.conv2dLayer(input_op=inputs, scope='Conv2d_1a_3x3', kernel_size=[3, 3],
                               filters=32, strides=2, padding='VALID')
 
             # 149 x 149 x 32
-            net = conv2dLayer(input_op=net, scope='Conv2d_2a_3x3', kernel_size=[3, 3],
+            net = self.conv2dLayer(input_op=net, scope='Conv2d_2a_3x3', kernel_size=[3, 3],
                               filters=32, strides=1, padding='VALID')
             # 147 x 147 x 32
-            net = conv2dLayer(input_op=net, scope='Conv2d_2b_3x3', kernel_size=[3, 3],
+            net = self.conv2dLayer(input_op=net, scope='Conv2d_2b_3x3', kernel_size=[3, 3],
                               filters=64, strides=1, padding='SAME')
 
             # 147 x 147 x 64
             net = maxPool2dLayer(input_op=net, scope='MaxPool_3a_3x3', kernel_size=[3, 3],
                                  strides=2, padding='VALID')
             # 73 X 73 X 64
-            net = conv2dLayer(input_op=net, scope='Conv2d_3b_1x1', kernel_size=[1, 1],
+            net = self.conv2dLayer(input_op=net, scope='Conv2d_3b_1x1', kernel_size=[1, 1],
                               filters=80, strides=1, padding='VALID')
 
             # 73 x 73 x 80
-            net = conv2dLayer(input_op=net, scope='Conv2d_4a_3x3', kernel_size=[3, 3],
+            net = self.conv2dLayer(input_op=net, scope='Conv2d_4a_3x3', kernel_size=[3, 3],
                               filters=192, strides=1, padding='VALID')
 
             # 71 x 71 x 192
@@ -235,13 +247,13 @@ class InceptionV3():
         with tf.compat.v1.variable_scope(scope):
             # branch 0
             with tf.compat.v1.variable_scope('Branch_0'):
-                branch_0 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_0 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[0], strides=1)
             # branch 1
             with tf.compat.v1.variable_scope('Branch_1'):
-                branch_1 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_1 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[1], strides=1)
-                branch_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0b_3x3', kernel_size=[5, 5],
+                branch_1 = self.conv2dLayer(input_op=branch_1, scope='Conv2d_0b_3x3', kernel_size=[5, 5],
                                        filters=filters_list[2], strides=1)
                 # branch_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0b_3x3', kernel_size=[3, 3],
                 #                        filters=filters_list[2], strides=1)
@@ -249,16 +261,16 @@ class InceptionV3():
                 #                        filters=filters_list[3], strides=1)
             # branch 2
             with tf.compat.v1.variable_scope('Branch_2'):
-                branch_2 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_2 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[3], strides=1)
-                branch_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0b_3x3', kernel_size=[3, 3],
+                branch_2 = self.conv2dLayer(input_op=branch_2, scope='Conv2d_0b_3x3', kernel_size=[3, 3],
                                        filters=filters_list[4], strides=1)
-                branch_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0c_3x3', kernel_size=[3, 3],
+                branch_2 = self.conv2dLayer(input_op=branch_2, scope='Conv2d_0c_3x3', kernel_size=[3, 3],
                                        filters=filters_list[5], strides=1)
             # branch 3
             with tf.compat.v1.variable_scope('Branch_3'):
                 branch_3 = avgPool2dLayer(input_op=input_op, scope='AvgPool_3x3', kernel_size=[3, 3], strides=1)
-                branch_3 = conv2dLayer(input_op=branch_1, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_3 = self.conv2dLayer(input_op=branch_1, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[6], strides=1)
             net = tf.concat(values=[branch_0, branch_1, branch_2, branch_3], axis=3)
         return net
@@ -275,32 +287,32 @@ class InceptionV3():
         with tf.compat.v1.variable_scope(scope):
             # branch 0
             with tf.compat.v1.variable_scope('Branch_0'):
-                branch_0 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_0 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[0], strides=1)
             # branch 1
             with tf.compat.v1.variable_scope('Branch_1'):
-                branch_1 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_1 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[1], strides=1)
-                branch_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0b_1x7', kernel_size=[1, 7],
+                branch_1 = self.conv2dLayer(input_op=branch_1, scope='Conv2d_0b_1x7', kernel_size=[1, 7],
                                        filters=filters_list[2], strides=1)
-                branch_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0c_7x1', kernel_size=[7, 1],
+                branch_1 = self.conv2dLayer(input_op=branch_1, scope='Conv2d_0c_7x1', kernel_size=[7, 1],
                                        filters=filters_list[3], strides=1)
             # branch 2
             with tf.compat.v1.variable_scope('Branch_2'):
-                branch_2 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_2 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[4], strides=1)
-                branch_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0b_7x1', kernel_size=[7, 1],
+                branch_2 = self.conv2dLayer(input_op=branch_2, scope='Conv2d_0b_7x1', kernel_size=[7, 1],
                                        filters=filters_list[5], strides=1)
-                branch_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0c_1x7', kernel_size=[1, 7],
+                branch_2 = self.conv2dLayer(input_op=branch_2, scope='Conv2d_0c_1x7', kernel_size=[1, 7],
                                        filters=filters_list[6], strides=1)
-                branch_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0d_7x1', kernel_size=[7, 1],
+                branch_2 = self.conv2dLayer(input_op=branch_2, scope='Conv2d_0d_7x1', kernel_size=[7, 1],
                                        filters=filters_list[7], strides=1)
-                branch_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0e_1x7', kernel_size=[1, 7],
+                branch_2 = self.conv2dLayer(input_op=branch_2, scope='Conv2d_0e_1x7', kernel_size=[1, 7],
                                        filters=filters_list[8], strides=1)
             # branch c
             with tf.compat.v1.variable_scope('Branch_3'):
-                branch_3 = avgPool2dLayer(input_op=input_op, scope='AvgPool_0a_3x3', kernel_size=[3, 3])
-                branch_3 = conv2dLayer(input_op=branch_3, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_3 = avgPool2dLayer(input_op=input_op, scope='AvgPool_0a_3x3', kernel_size=[3, 3], strides=1)
+                branch_3 = self.conv2dLayer(input_op=branch_3, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[9], strides=1)
             net = tf.concat(values=[branch_0, branch_1, branch_2, branch_3], axis=3)
             return net
@@ -316,32 +328,32 @@ class InceptionV3():
         with tf.compat.v1.variable_scope(scope):
             with tf.compat.v1.variable_scope('Branch_0'):
                 # branch_0
-                branch_0 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_0 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[0], strides=1)
             with tf.compat.v1.variable_scope('Branch_1'):
                 # branch_1
-                branch_1 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_1 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[1], strides=1)
-                branch_1_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0b_1x3', kernel_size=[1, 3],
+                branch_1_1 = self.conv2dLayer(input_op=branch_1, scope='Conv2d_0b_1x3', kernel_size=[1, 3],
                                          filters=filters_list[2], strides=1)
-                branch_1_2 = conv2dLayer(input_op=branch_1, scope='Conv2d_0b_3x1', kernel_size=[3, 1],
+                branch_1_2 = self.conv2dLayer(input_op=branch_1, scope='Conv2d_0b_3x1', kernel_size=[3, 1],
                                          filters=filters_list[3], strides=1)
                 branch_1 = tf.concat(values=[branch_1_1, branch_1_2], axis=3)
 
             with tf.compat.v1.variable_scope('Branch_2'):
                 # branch_1
-                branch_2 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_2 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[4], strides=1)
-                branch_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0b_3x3', kernel_size=[3, 3],
+                branch_2 = self.conv2dLayer(input_op=branch_2, scope='Conv2d_0b_3x3', kernel_size=[3, 3],
                                          filters=filters_list[5], strides=1)
-                branch_2_1 = conv2dLayer(input_op=branch_2, scope='Conv2d_0c_1x3', kernel_size=[1, 3],
+                branch_2_1 = self.conv2dLayer(input_op=branch_2, scope='Conv2d_0c_1x3', kernel_size=[1, 3],
                                          filters=filters_list[6], strides=1)
-                branch_2_2 = conv2dLayer(input_op=branch_2, scope='Conv2d_0c_3x1', kernel_size=[3, 1],
+                branch_2_2 = self.conv2dLayer(input_op=branch_2, scope='Conv2d_0c_3x1', kernel_size=[3, 1],
                                          filters=filters_list[7], strides=1)
                 branch_2 = tf.concat(values=[branch_2_1, branch_2_2], axis=3)
             with tf.compat.v1.variable_scope('Branch_3'):
-                branch_3 = avgPool2dLayer(input_op=input_op, scope='AvgPool_0a_3x3', kernel_size=[3, 3])
-                branch_3 = conv2dLayer(input_op=branch_3, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_3 = avgPool2dLayer(input_op=input_op, scope='AvgPool_0a_3x3', kernel_size=[3, 3], strides=1)
+                branch_3 = self.conv2dLayer(input_op=branch_3, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[8], strides=1)
             net = tf.concat(values=[branch_0, branch_1, branch_2, branch_3], axis=3)
             return net
@@ -359,15 +371,15 @@ class InceptionV3():
             with tf.compat.v1.variable_scope('Branch_0'):
                 # branch_0 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                 #                        filters=filters_list[0], strides=1)
-                branch_0 = conv2dLayer(input_op=input_op, scope='Conv2d_1a_3x3', kernel_size=[3, 3],
+                branch_0 = self.conv2dLayer(input_op=input_op, scope='Conv2d_1a_3x3', kernel_size=[3, 3],
                                        filters=filters_list[0], strides=2, padding='VALID')
             # branch 1
             with tf.compat.v1.variable_scope('Branch_1'):
-                branch_1 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_1 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[1], strides=1)
-                branch_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0b_3x3', kernel_size=[3, 3],
+                branch_1 = self.conv2dLayer(input_op=branch_1, scope='Conv2d_0b_3x3', kernel_size=[3, 3],
                                        filters=filters_list[2], strides=1)
-                branch_1 = conv2dLayer(input_op=branch_1, scope='Con2d_0c_3x3', kernel_size=[3, 3],
+                branch_1 = self.conv2dLayer(input_op=branch_1, scope='Con2d_0c_3x3', kernel_size=[3, 3],
                                        filters=filters_list[3], strides=2, padding='VALID')
             # branch 2
             with tf.compat.v1.variable_scope('Branch_2'):
@@ -387,19 +399,19 @@ class InceptionV3():
         with tf.compat.v1.variable_scope(scope):
             # branch 0
             with tf.compat.v1.variable_scope('Branch_0'):
-                branch_0 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_0 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[0], strides=1)
-                branch_0 = conv2dLayer(input_op=branch_0, scope='Conv2d_1a_3x3', kernel_size=[3, 3],
+                branch_0 = self.conv2dLayer(input_op=branch_0, scope='Conv2d_1a_3x3', kernel_size=[3, 3],
                                        filters=filters_list[1], strides=2, padding='VALID')
             # branch 1
             with tf.compat.v1.variable_scope('Branch_1'):
-                branch_1 = conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
+                branch_1 = self.conv2dLayer(input_op=input_op, scope='Conv2d_0a_1x1', kernel_size=[1, 1],
                                        filters=filters_list[2], strides=1)
-                branch_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0b_1x7', kernel_size=[1, 7],
+                branch_1 = self.conv2dLayer(input_op=branch_1, scope='Conv2d_0b_1x7', kernel_size=[1, 7],
                                        filters=filters_list[3], strides=1)
-                branch_1 = conv2dLayer(input_op=branch_1, scope='Conv2d_0c_7x1', kernel_size=[7, 1],
+                branch_1 = self.conv2dLayer(input_op=branch_1, scope='Conv2d_0c_7x1', kernel_size=[7, 1],
                                        filters=filters_list[4], strides=1)
-                branch_1 = conv2dLayer(input_op=branch_1, scope='Con2d_1a_3x3', kernel_size=[3, 3],
+                branch_1 = self.conv2dLayer(input_op=branch_1, scope='Con2d_1a_3x3', kernel_size=[3, 3],
                                        filters=filters_list[5], strides=2, padding='VALID')
             # branch 2
             with tf.compat.v1.variable_scope('Branch_2'):
@@ -408,49 +420,89 @@ class InceptionV3():
             net = tf.concat(values=[branch_0, branch_1, branch_2], axis=3)
             return net
 
+    def conv2dLayer(self, input_op, scope, filters, kernel_size=None, strides=None, use_bias=False, weight_mean=None,
+                    weight_stddev=None, bias_value=None, padding='SAME', parameter=None):
+        """
+        convolution operation
+        :param input_op:
+        :param scope:
+        :param filters:
+        :param kernel_size:
+        :param strides:
+        :param use_bias:
+        :param padding:
+        :param parameter:
+        :return:
+        """
+        if kernel_size is None:
+            kernel_size = [3, 3]
+        if strides is None:
+            strides = 1
+        if weight_mean is None:
+            weight_mean = 0.0
+        if weight_stddev is None:
+            weight_stddev = 1e-1
+        if bias_value is None:
+            bias_value = 0.0
+        # get feature num
+        features = input_op.get_shape()[-1].value
+        with tf.name_scope(scope) as scope:
+            filter = getConvFilter(filter_shape=[kernel_size[0], kernel_size[1], features, filters],
+                                   mean=weight_mean, stddev=weight_stddev)
 
+            outputs = tf.nn.conv2d(input=input_op, filter=filter, strides=[1, strides, strides, 1], padding=padding)
 
-def conv2dLayer(input_op, scope, filters, kernel_size=None, strides=None, use_bias=False, weight_mean=None,
-                weight_stddev=None, bias_value=None, padding='SAME', parameter=None):
-    """
-    convolution operation
-    :param input_op:
-    :param scope:
-    :param filters:
-    :param kernel_size:
-    :param strides:
-    :param use_bias:
-    :param padding:
-    :param parameter:
-    :return:
-    """
-    if kernel_size is None:
-        kernel_size = [3, 3]
-    if strides is None:
-        strides = 1
-    if weight_mean is None:
-        weight_mean = 0.0
-    if weight_stddev is None:
-        weight_mean = 1e-1
-    if bias_value is None:
-        bias_value = 0.0
-    # get feature num
-    features = input_op.get_shape()[-1].value
-    with tf.name_scope(scope) as scope:
-        filter = getConvFilter(filter_shape=[kernel_size[0], kernel_size[1], features, filters],
-                               mean=weight_mean, stddev=weight_stddev)
+            if use_bias:
+                biases = getBias(bias_shape=[filters], value=bias_value)
+                outputs = tf.nn.bias_add(value=outputs, bias=biases)
+            #     parameter += [filter, biases]
+            # else:
+            #     parameter += [filters]
+            outputs = batchNormalize2d(input_op=outputs, is_training=self.is_training, scope=scope)
+            return tf.nn.relu(outputs)
 
-        outputs = tf.nn.conv2d(input=input_op, filter=filter, strides=[1, strides, strides, 1], padding=padding)
+    def training(self, learnRate, globalStep, loss):
+        """
+        train operation
+        :param learnRate:
+        :param globalStep:
+        :param args:
+        :return:
+        """
+        learning_rate = tf.train.exponential_decay(learning_rate=learnRate, global_step=globalStep,
+                                                   decay_steps=self.decay_steps, decay_rate=self.decay_rate,
+                                                   staircase=False)
+        return tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=globalStep)
 
-        if use_bias:
-            biases = getBias(bias_shape=[filters], value=bias_value)
-            outputs = tf.nn.bias_add(value=outputs, bias=biases)
-        #     parameter += [filter, biases]
-        # else:
-        #     parameter += [filters]
-        outputs = batchNormalize2d(input_op=outputs)
-        return tf.nn.relu(outputs)
+    def losses(self, logits, labels, scope='Loss'):
+        """
+        loss function
+        :param logits:
+        :param labels:
+        :return:
+        """
+        with tf.name_scope(scope) as scope:
+            cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=labels, logits=logits, name='Entropy')
+            return tf.reduce_mean(input_tensor=cross_entropy, name='Entropy_Mean')
 
+    def evaluate_batch(self, logits, labels, scope='Evaluate_Batch'):
+        """
+        evaluate one batch correct num
+        :param logits:
+        :param label:
+        :return:
+        """
+        with tf.name_scope(scope):
+            correct_predict = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
+            return tf.reduce_sum(tf.cast(correct_predict, dtype=tf.float32))
+
+    def fill_feed_dict(self, image_feed, label_feed, is_training):
+        feed_dict = {
+            self.raw_input_data: image_feed,
+            self.raw_input_label: label_feed,
+            self.is_training: is_training
+        }
+        return feed_dict
 
 def fcLayer(input_op, scope, num_outputs, parameter=None):
     """
@@ -580,7 +632,7 @@ def getBias(bias_shape, value=0.0):
                        trainable=True, name='Bias')
 
 
-def batchNormalize2d(input_op, istring_True=True, eps=1e-5, affine=True, decay=0.9, name=None):
+def batchNormalize2d(input_op, is_training=True, eps=1e-5, affine=True, decay=0.9, scope='Batch_Normalize'):
     """
 
     :param input_op:
@@ -589,25 +641,30 @@ def batchNormalize2d(input_op, istring_True=True, eps=1e-5, affine=True, decay=0
     :param name:
     :return:
     """
-    with tf.compat.v1.variable_scope(name, default_name='Batch_Normalize'):
+    with tf.compat.v1.variable_scope(scope, default_name='Batch_Normalize') as bnscope :
         axis = list(range(len(input_op.get_shape())-1))
         mean, variance = tf.nn.moments(x=input_op, axes=axis, name='moment')
 
-        params_shape = tf.shape(input_op)[-1]
+        params_shape = input_op.get_shape()[-1:]
         moving_mean = getVariable('moving_mean', params_shape, initializer=tf.zeros_initializer, trainable=False)
         moving_variance = getVariable('moving_variance', params_shape, initializer=tf.zeros_initializer, trainable=False)
-
+        # moving_mean = tf.get_variable(name='moving_mean', dtype=tf.float32, shape=params_shape,
+        #                               initializer=tf.zeros_initializer, trainable=False)
+        # moving_variance = tf.get_variable(name='moving_variance', dtype=tf.float32, shape=params_shape,
+        #                                   initializer=tf.ones_initializer, trainable=False)
         def mean_and_var_update():
             with tf.control_dependencies(control_inputs=[
                 moving_averages.assign_moving_average(variable=moving_mean, value=mean, decay=decay),
                 moving_averages.assign_moving_average(variable=moving_variance, value=variance, decay=decay)
             ]):
                 return tf.identity(mean), tf.identity(variance)
-        mean, variance = tf.cond(pred=istring_True, true_fn=mean_and_var_update,
+        mean, variance = tf.cond(pred=is_training, true_fn=mean_and_var_update,
                                  false_fn=lambda:(moving_mean, moving_variance))
         if affine:
             beta = getVariable(name='beta', shape=params_shape, initializer=tf.zeros_initializer)
             gamma = getVariable(name='gamma', shape=params_shape, initializer=tf.ones_initializer)
+            # beta = tf.Variable(initial_value=tf.zeros(shape=params_shape), name='beta')
+            # gamma = tf.Variatf.Variable(tf.random_uniform(shape=(2, 3), minval=0, maxval=3))ble(initial_value=tf.ones(shape=params_shape), name='gamma')
         else:
             beta = None
             gamma = None
@@ -627,9 +684,9 @@ def getVariable(name, shape, initializer, weight_decay=0.0, dtype=tf.float32, tr
     :param trainable:
     :return:
     """
-    if weight_decay > 0:
-        regularizer = tf.contrib.layers.l2_regularizer(weight_decay)
-    else:
-        regularizer = None
-    return tf.get_variable(name=name, shape=shape, dtype=dtype, initializer=initializer, use_resource=regularizer,
-                           trainable=trainable)
+    # if weight_decay > 0:
+    #     regularizer = tf.contrib.layers.l2_regularizer(weight_decay)
+    # else:
+    #     regularizer = None
+    return tf.get_variable(name=name, shape=shape, dtype=dtype, initializer=initializer, trainable=trainable)
+    # return tf.Variable(initial_value=tf.zeros(shape=shape), trainable=trainable, name=name)
