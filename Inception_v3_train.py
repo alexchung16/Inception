@@ -22,7 +22,7 @@ test_path = os.path.join(original_dataset_dir, 'test')
 record_file = os.path.join(tfrecord_dir, 'image.tfrecords')
 model_path = os.path.join(os.getcwd(), 'model')
 model_name = os.path.join(model_path, 'inception_v3.pb')
-pretrain_model_dir = '/home/alex/Documents/pretraing_model/vgg16/vgg16.ckpt'
+pretrain_model_dir = '/home/alex/Documents/pretraing_model/Inception/inception_v3/inception_v3.ckpt'
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -128,11 +128,26 @@ if __name__ == "__main__":
                                                     class_depth=FLAGS.num_classes,
                                                     epoch=FLAGS.epoch,
                                                     shuffle=False)
+
         init_op = tf.group(
             tf.global_variables_initializer(),
             tf.local_variables_initializer()
         )
+
         sess.run(init_op)
+        # get model variable of network
+        model_variable = tf.model_variables()
+        for var in model_variable:
+            print(var.name)
+        # load pretrain model
+        if FLAGS.is_pretrain:
+            # remove variable of fc8 layer from pretrain model
+            custom_scope = ['InceptionV3/Logits/Conv2d_1c_1x1']
+            for scope in custom_scope:
+                variables = tf.model_variables(scope=scope)
+                [model_variable.remove(var) for var in variables]
+            saver = tf.train.Saver(var_list=model_variable)
+            saver.restore(sess, save_path=FLAGS.pretrain_model_dir)
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         try:
