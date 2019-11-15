@@ -554,6 +554,7 @@ class InceptionV3():
         learning_rate = tf.train.exponential_decay(learning_rate=learnRate, global_step=globalStep,
                                                    decay_steps=self.decay_steps, decay_rate=self.decay_rate,
                                                    staircase=False)
+        # according to use request of slim.batch_norm
         # update moving_mean and moving_variance when training
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
