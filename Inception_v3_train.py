@@ -35,8 +35,8 @@ flags.DEFINE_integer('epoch', 30, 'Number of epoch size.')
 flags.DEFINE_integer('step_per_epoch', 100, 'Number of step size of per epoch.')
 flags.DEFINE_float('learning_rate', 1e-3, 'Initial learning rate.')
 flags.DEFINE_float('decay_rate', 0.99, 'Number of learning decay rate.')
-flags.DEFINE_bool('global_pool', False, 'if True, use global pool.')
-flags.DEFINE_bool('spacial_squeeze', True, 'if True, execute squeeze.')
+# flags.DEFINE_bool('global_pool', False, 'if True, use global pool.')
+# flags.DEFINE_bool('spacial_squeeze', True, 'if True, execute squeeze.')
 flags.DEFINE_integer('num_epoch_per_decay', 2, 'Number epoch after each leaning rate decapy.')
 flags.DEFINE_float('keep_prob', 0.8, 'Number of probability that each element is kept.')
 flags.DEFINE_string('train_dir', record_file, 'Directory to put the training data.')
@@ -111,18 +111,13 @@ if __name__ == "__main__":
                                learning_rate=FLAGS.learning_rate,
                                num_samples_per_epoch=num_samples,
                                num_epoch_per_decay=FLAGS.num_epoch_per_decay,
-                               keep_prob=FLAGS.keep_prob,
-                               global_pool=FLAGS.global_pool,
-                               spacial_squeeze=FLAGS.spacial_squeeze)
-
-
+                               keep_prob=FLAGS.keep_prob)
 
     # add scalar value to summary protocol buffer
     tf.summary.scalar('loss', inception_v3.loss)
     tf.summary.scalar('acc', inception_v3.loss)
 
     # networkStructureTest(batch_size=batch_size)
-
     images, labels, filenames = reader_tfrecord(record_file=FLAGS.train_dir,
                                                 batch_size=batch_size,
                                                 input_shape=[FLAGS.height, FLAGS.width, FLAGS.depth],
