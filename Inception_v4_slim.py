@@ -15,33 +15,41 @@ class InceptionV4():
     """
     Inception v1
     """
-    def __init__(self, input_shape, num_classes, batch_size, decay_steps, decay_rate, learning_rate,
-                 keep_prob=0.8, reuse=tf.AUTO_REUSE):
+
+    def __init__(self, input_shape, num_classes, batch_size, num_samples_per_epoch, num_epoch_per_decay,
+                 decay_rate, learning_rate, keep_prob=0.8, regular_weight_decay=0.00004, batch_norm_decay=0.9997,
+                 batch_norm_epsilon=0.001, batch_norm_scale=False,batch_norm_fused=True, reuse=tf.AUTO_REUSE):
         self.num_classes = num_classes
         self.batch_size = batch_size
-        self.decay_steps = decay_steps
+        self.decay_steps = int(num_samples_per_epoch / batch_size * num_epoch_per_decay)
         self.decay_rate = decay_rate
         self.learning_rate = learning_rate
         self.keep_prob = keep_prob
         self.reuse = reuse
-
+        self.regular_weight_decay = regular_weight_decay
+        self.batch_norm_decay = batch_norm_decay
+        self.batch_norm_epsilon = batch_norm_epsilon
+        self.batch_norm_scale = batch_norm_scale
+        self.batch_norm_fused = batch_norm_fused
         # self.initializer = tf.random_normal_initializer(stddev=0.1)
         # add placeholder (X,label)
-        self.raw_input_data = tf.compat.v1.placeholder (tf.float32, shape=[None, input_shape[0], input_shape[1], input_shape[2]], name="input_images")
+        self.raw_input_data = tf.compat.v1.placeholder(tf.float32,
+                                                       shape=[None, input_shape[0], input_shape[1], input_shape[2]],
+                                                       name="input_images")
         # y [None,num_classes]
-        self.raw_input_label = tf.compat.v1.placeholder (tf.float32, shape=[None, self.num_classes], name="class_label")
+        self.raw_input_label = tf.compat.v1.placeholder(tf.float32, shape=[None, self.num_classes], name="class_label")
         self.is_training = tf.compat.v1.placeholder_with_default(input=False, shape=(), name='is_training')
 
-        self.global_step = tf.Variable(0, trainable=False, name="global_Step")
+        self.global_step = tf.Variable(0, trainable=False, name="global_step")
         self.epoch_step = tf.Variable(0, trainable=False, name="epoch_step")
 
         # logits
-        self.logits =  self.inference(self.raw_input_data, scope='InceptionV4')
+        self.logits = self.inference(self.raw_input_data, scope='InceptionV4')
         # # computer loss value
         self.loss = self.losses(labels=self.raw_input_label, logits=self.logits, scope='Loss')
         # train operation
         self.train = self.training(self.learning_rate, self.global_step, loss=self.loss)
-        self.evaluate_accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
+        self.train_accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
 
 
     def inference(self, inputs, scope='InceptionV4'):
@@ -67,9 +75,30 @@ class InceptionV4():
         inception v4
         :return:
         """
-        with slim.arg_scope(self.inception_v4_arg_scope()):
-            with tf.variable_scope(scope, default_name='InceptionV4', values=[inputs], reuse=reuse):
-                with slim.arg_scope([slim.batch_norm, slim.dropout], is_training=is_training):
+
+        batch_norm_params = {
+            'is_training': is_training,
+            # Decay for the moving averages.
+            'decay': self.batch_norm_decay,
+            # epsilon to prevent 0s in variance.
+            'epsilon': self.batch_norm_epsilon,
+            # collection containing update_ops.
+            'updates_collections': tf.GraphKeys.UPDATE_OPS,
+            # use gamma for update
+            'scale': self.batch_norm_scale,
+            # use fused batch norm if possible.
+            'fused': self.batch_norm_fused,
+        }
+        with tf.compat.v1.variable_scope(scope, default_name='InceptionV4', values=[inputs], reuse=reuse) as scope:
+            # Set weight_decay for weights in Conv and FC layers.
+            with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                                weights_regularizer=slim.l2_regularizer(self.regular_weight_decay)):
+                with slim.arg_scope(
+                        [slim.conv2d],
+                        weights_initializer=slim.variance_scaling_initializer(),
+                        activation_fn=tf.nn.relu,
+                        normalizer_fn=slim.batch_norm,
+                        normalizer_params=batch_norm_params) as sc:
                     with slim.arg_scope([slim.conv2d, slim.avg_pool2d, slim.max_pool2d], stride=1, padding='SAME'):
                         net = self.inception_v4_base(inputs=inputs, scope=scope)
                         with tf.variable_scope('Logits'):
@@ -80,11 +109,11 @@ class InceptionV4():
                             net = slim.dropout(inputs=net, keep_prob=keep_prob, scope='Dropout_1b')
                             net = slim.flatten(inputs=net, scope='PreLogitsFlatten')
                             # (, 1536)
-                            net = slim.fully_connected(inputs=net, num_outputs=512, scope='Fcn_1c')
+                            net = slim.fully_connected(inputs=net, num_outputs=512, scope='fcn_1c')
                             # (, 512)
-                            logits = slim.fully_connected(inputs=net, num_outputs=num_classes, name='Logits')
+                            logits = slim.fully_connected(inputs=net, num_outputs=num_classes, scope='Logits')
                             # (, num_classes)
-                            prop = slim.softmax(inputs=logits, scope='Softmax')
+                            prop = slim.softmax(logits=logits, scope='Softmax')
                             return prop
 
 
@@ -95,7 +124,7 @@ class InceptionV4():
         :param scope:
         :return:
         """
-        with tf.compat.v1.variable_scope(scope, default_name='InceptionV3', values=[inputs]):
+        with tf.compat.v1.variable_scope(scope, default_name='InceptionV4', values=[inputs]):
             with slim.arg_scope([slim.conv2d, slim.max_pool2d, slim.avg_pool2d], stride=1, padding='VALID'):
                 # 299 x 299 x 3
                 net = slim.conv2d(inputs=inputs, num_outputs=32, kernel_size=[3, 3], stride=2,
@@ -121,12 +150,12 @@ class InceptionV4():
                 with tf.variable_scope('Mixed_4a'):
                     with tf.variable_scope('Branch_0'):
                         branch_0 = slim.conv2d(net, 64, [1, 1], scope='Conv2d_0a_1x1')
-                        branch_0 = slim.conv2d(branch_0, 96, [3, 3], padding='VALID', cope='Conv2d_1a_3x3')
+                        branch_0 = slim.conv2d(branch_0, 96, [3, 3], padding='VALID', scope='Conv2d_1a_3x3')
                     with tf.variable_scope('Branch_1'):
-                        branch_1 = slim.conv2d(net, 64, [1, 1], scope='Conv2d_0a_1x1')
-                        branch_1 = slim.conv2d(branch_1, 64, [1, 7], scope='Conv2d_0b_1x7')
-                        branch_1 = slim.conv2d(branch_1, 64, [7, 1], scope='Conv2d_0c_7x1')
-                        branch_1 = slim.conv2d(branch_1, 96, [3, 3], padding='VALID', scope='Conv2d_1a_3x3')
+                        branch_1 = slim.conv2d(net, 64, [1, 1], scope='Conv2d_0a_1x1', padding='SAME')
+                        branch_1 = slim.conv2d(branch_1, 64, [1, 7], scope='Conv2d_0b_1x7', padding='SAME')
+                        branch_1 = slim.conv2d(branch_1, 64, [7, 1], scope='Conv2d_0c_7x1', padding='SAME')
+                        branch_1 = slim.conv2d(branch_1, 96, [3, 3], scope='Conv2d_1a_3x3', padding='VALID')
                     net = tf.concat(axis=3, values=[branch_0, branch_1])
                 # 71 x 71 x 192
                 with tf.variable_scope('Mixed_5a'):
@@ -202,6 +231,7 @@ class InceptionV4():
             'updates_collections': batch_norm_updates_collections,
             # use fused batch norm if possible.
             'fused': None,
+            # use gamma for update
             'scale': batch_norm_scale,
         }
         if use_batch_norm:
@@ -239,8 +269,8 @@ class InceptionV4():
                 with tf.compat.v1.variable_scope('Branch_1'):
                     branch_1 = slim.conv2d(inputs=inputs, num_outputs=64, kernel_size=[1, 1], stride=1,
                                            scope='Conv2d_0a_1x1')
-                    branch_1 = slim.conv2d(inputs=branch_1, num_outputs=96, kernel_size=[1, 1], stride=1,
-                                           scope='Conv2d_0b_5x5')
+                    branch_1 = slim.conv2d(inputs=branch_1, num_outputs=96, kernel_size=[3, 3], stride=1,
+                                           scope='Conv2d_0b_3x3')
                 # branch 2
                 with tf.compat.v1.variable_scope('Branch_2'):
                     branch_2 = slim.conv2d(inputs=inputs, num_outputs=64, kernel_size=[1, 1], stride=1,

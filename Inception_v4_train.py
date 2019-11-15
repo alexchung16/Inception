@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @ File Inception_v3_train.py
+# @ File Inception_v4_slim.py
 # @ Description :
 # @ Author alexchung
-# @ Time 29/10/2019 PM 13:50
+# @ Time 15/11/2019 AM 11:54
 
 
 import os
 import numpy as np
 import tensorflow as tf
 # from Inception.Inception_v3 import InceptionV3
-from Inception.Inception_v3_slim import InceptionV3
+from Inception.Inception_v4_slim import InceptionV4
 from TFRecordProcessing.parse_TFRecord import reader_tfrecord, get_num_samples
 from tensorflow.python.framework import graph_util
 #
@@ -21,8 +21,8 @@ train_path = os.path.join(original_dataset_dir, 'train')
 test_path = os.path.join(original_dataset_dir, 'test')
 record_file = os.path.join(tfrecord_dir, 'image.tfrecords')
 model_path = os.path.join(os.getcwd(), 'model')
-model_name = os.path.join(model_path, 'inception_v3.pb')
-pretrain_model_dir = '/home/alex/Documents/pretraing_model/Inception/inception_v3/inception_v3.ckpt'
+model_name = os.path.join(model_path, 'inception_v4.pb')
+pretrain_model_dir = '/home/alex/Documents/pretraing_model/Inception/inception_v4/inception_v4.ckpt'
 logs_dir = os.path.join(os.getcwd(), 'logs')
 
 flags = tf.app.flags
@@ -43,7 +43,7 @@ flags.DEFINE_float('regular_weight_decay', 0.00004, 'Number of weight decay with
 flags.DEFINE_float('batch_norm_decay', 0.9997, 'Number of batch norm decay.')
 flags.DEFINE_float('batch_norm_epsilon', 0.001, 'Number of batch norm epsilon.')
 flags.DEFINE_bool('batch_norm_scale', False, 'if True, use gamma for update.')
-flags.DEFINE_bool('batch_norm_fused', True, 'if True, use a faster, fused implementation if possible.')
+flags.DEFINE_bool('batch_norm_fused', None, 'if True, use a faster, fused implementation if possible.')
 
 flags.DEFINE_string('train_dir', record_file, 'Directory to put the training data.')
 flags.DEFINE_bool('is_pretrain', True, 'if True, use pretrain model.')
@@ -96,9 +96,9 @@ def networkStructureTest(batch_size):
         sess.run(init_op)
 
         inputs, labels = sess.run([inputs, labels])
-        feed_dict = inception_v3.fill_feed_dict(image_feed=inputs, label_feed=labels, is_training=True)
+        feed_dict = inception_v4.fill_feed_dict(image_feed=inputs, label_feed=labels, is_training=True)
 
-        logits = sess.run(fetches=[inception_v3.logits], feed_dict=feed_dict)
+        logits = sess.run(fetches=[inception_v4.logits], feed_dict=feed_dict)
         assert list(logits[0].shape) == [batch_size, FLAGS.num_classes]
 
 #
@@ -108,9 +108,9 @@ if __name__ == "__main__":
     num_samples = get_num_samples(record_file=FLAGS.train_dir)
     batch_size = num_samples // FLAGS.step_per_epoch
 
-    inception_v3 = InceptionV3(input_shape=[FLAGS.height, FLAGS.width, FLAGS.depth],
+    inception_v4 = InceptionV4(input_shape=[FLAGS.height, FLAGS.width, FLAGS.depth],
                                num_classes=FLAGS.num_classes,
-                               batch_size=batch_size, 
+                               batch_size=batch_size,
                                decay_rate=FLAGS.decay_rate,
                                learning_rate=FLAGS.learning_rate,
                                num_samples_per_epoch=num_samples,
@@ -119,12 +119,12 @@ if __name__ == "__main__":
                                regular_weight_decay=FLAGS.regular_weight_decay,
                                batch_norm_decay=FLAGS.batch_norm_decay,
                                batch_norm_epsilon=FLAGS.batch_norm_epsilon,
-                               batch_norm_fused=FLAGS.batch_norm_fused
-                               )
+                               batch_norm_fused=FLAGS.batch_norm_fused,
+                               batch_norm_scale=FLAGS.batch_norm_scale)
 
     # add scalar value to summary protocol buffer
-    tf.summary.scalar('loss', inception_v3.loss)
-    tf.summary.scalar('accuracy', inception_v3.train_accuracy)
+    tf.summary.scalar('loss', inception_v4.loss)
+    tf.summary.scalar('accuracy', inception_v4.train_accuracy)
 
     # networkStructureTest(batch_size=batch_size)
     images, labels, filenames = reader_tfrecord(record_file=FLAGS.train_dir,
@@ -132,13 +132,12 @@ if __name__ == "__main__":
                                                 input_shape=[FLAGS.height, FLAGS.width, FLAGS.depth],
                                                 class_depth=FLAGS.num_classes,
                                                 epoch=FLAGS.epoch,
-                                                shuffle=False)
+                                                shuffle=True)
     init_op = tf.group(
         tf.global_variables_initializer(),
         tf.local_variables_initializer()
     )
     # train and save model
-
     with tf.Session() as sess:
         sess.run(init_op)
 
@@ -151,14 +150,16 @@ if __name__ == "__main__":
             print(var.name)
 
         # get and add histogram to summary protocol buffer
-        logit_weight = graph.get_tensor_by_name(name='InceptionV3/Logits/Conv2d_1c_1x1/weights:0')
-        tf.summary.histogram(name='logits/weight', values=logit_weight)
+        fcn_weight = graph.get_tensor_by_name(name='InceptionV4/Logits/fcn_1c/weights:0')
+        tf.summary.histogram(name='logits/fcn_1c/weight', values=fcn_weight)
+        logits_weight = graph.get_tensor_by_name(name='InceptionV4/Logits/Logits/weights:0')
+        tf.summary.histogram(name='Logits/Logits/weight', values=logits_weight)
         # merges all summaries collected in the default graph
         summary_op = tf.summary.merge_all()
         # load pretrain model
         if FLAGS.is_pretrain:
             # remove variable of fc8 layer from pretrain model
-            custom_scope = ['InceptionV3/Logits/Conv2d_1c_1x1']
+            custom_scope = ['InceptionV4/Logits/fcn_1c', 'InceptionV4/Logits/Logits']
             for scope in custom_scope:
                 variables = tf.model_variables(scope=scope)
                 [model_variable.remove(var) for var in variables]
@@ -175,12 +176,12 @@ if __name__ == "__main__":
 
                         image, label, filename = sess.run([images, labels, filenames])
 
-                        feed_dict = inception_v3.fill_feed_dict(image_feed=image,
+                        feed_dict = inception_v4.fill_feed_dict(image_feed=image,
                                                                 label_feed=label,
                                                                 is_training=True)
 
                         _, loss_value, train_accuracy, summary = sess.run(
-                            fetches=[inception_v3.train, inception_v3.loss, inception_v3.evaluate_accuracy, summary_op],
+                            fetches=[inception_v4.train, inception_v4.loss, inception_v4.evaluate_accuracy, summary_op],
                             feed_dict=feed_dict)
 
                         print('  Step {0}/{1}: loss value {2}  train accuracy {3}'
@@ -191,8 +192,8 @@ if __name__ == "__main__":
 
                 # save model
                 # get op name for save model
-                input_op = inception_v3.raw_input_data.name
-                logit_op = inception_v3.logits.name
+                input_op = inception_v4.raw_input_data.name
+                logit_op = inception_v4.logits.name
                 # convert variable to constant
                 def_graph = tf.get_default_graph().as_graph_def()
                 constant_graph = tf.graph_util.convert_variables_to_constants(sess, def_graph,
@@ -208,4 +209,3 @@ if __name__ == "__main__":
     coord.join(threads)
     sess.close()
     print('model training has complete')
-

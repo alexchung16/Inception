@@ -22,15 +22,20 @@ class InceptionV3():
     Inception v1
     """
     def __init__(self, input_shape, num_classes, batch_size, num_samples_per_epoch, num_epoch_per_decay,
-                 decay_rate, learning_rate, keep_prob=0.8, reuse=tf.AUTO_REUSE):
+                 decay_rate, learning_rate, keep_prob=0.8, regular_weight_decay=0.00004, batch_norm_decay=0.9997,
+                 batch_norm_epsilon=0.001, batch_norm_scale=False, batch_norm_fused=True, reuse=tf.AUTO_REUSE):
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.decay_steps = int(num_samples_per_epoch / batch_size * num_epoch_per_decay)
         self.decay_rate = decay_rate
         self.learning_rate = learning_rate
         self.keep_prob = keep_prob
+        self.regular_weight_decay = regular_weight_decay
+        self.batch_norm_decay = batch_norm_decay
+        self.batch_norm_epsilon = batch_norm_epsilon
+        self.batch_norm_scale = batch_norm_scale
+        self.batch_norm_fused = batch_norm_fused
         self.reuse = reuse
-
         # self.initializer = tf.random_normal_initializer(stddev=0.1)
         # add placeholder (X,label)
         self.raw_input_data = tf.compat.v1.placeholder (tf.float32, shape=[None, input_shape[0], input_shape[1], input_shape[2]], name="input_images")
@@ -47,7 +52,7 @@ class InceptionV3():
         self.loss = self.losses(labels=self.raw_input_label, logits=self.logits, scope='Loss')
         # train operation
         self.train = self.training(self.learning_rate, self.global_step, loss=self.loss)
-        self.evaluate_accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
+        self.train_accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
 
 
     def inference(self, inputs, scope='InceptionV3'):
@@ -72,36 +77,32 @@ class InceptionV3():
         inception v3
         :return:
         """
-        weight_decay = 0.00004
-        batch_norm_var_collection = 'moving_vars'
-        batch_norm_decay = 0.9997
-        batch_norm_epsilon = 0.01
-        updates_collections = ops.GraphKeys.UPDATE_OPS
-        use_fused_batchnorm = True
 
         batch_norm_params = {
             'is_training': is_training,
             # Decay for the moving averages.
-            'decay': batch_norm_decay,
+            'decay': self.batch_norm_decay,
             # epsilon to prevent 0s in variance.
-            'epsilon': batch_norm_epsilon,
+            'epsilon': self.batch_norm_epsilon,
             # collection containing update_ops.
-            'updates_collections': updates_collections,
+            'updates_collections': tf.GraphKeys.UPDATE_OPS,
             # Use fused batch norm if possible.
-            'fused': use_fused_batchnorm,
+            'fused': self.batch_norm_fused,
+            # use gamma for update
+            'scale': self.batch_norm_scale,
             # collection containing the moving mean and moving variance.
             'variables_collections': {
                 'beta': None,
                 'gamma': None,
-                'moving_mean': [batch_norm_var_collection],
-                'moving_variance': [batch_norm_var_collection],
+                'moving_mean': ['moving_vars'],
+                'moving_variance': ['moving_vars'],
             }
         }
         with tf.compat.v1.variable_scope(scope, default_name='InceptionV3', values=[inputs], reuse=reuse) as scope:
             # Set weight_decay for weights in Conv and FC layers.
             with arg_scope(
                     [layers.conv2d, layers_lib.fully_connected],
-                    weights_regularizer=regularizers.l2_regularizer(weight_decay)):
+                    weights_regularizer=regularizers.l2_regularizer(self.regular_weight_decay)):
                 with arg_scope(
                         [layers.conv2d],
                         weights_initializer=initializers.variance_scaling_initializer(),
