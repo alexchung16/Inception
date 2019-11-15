@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from tensorflow.contrib.slim.python.slim.nets import inception_v3
+
 pretrain_model_dir = '/home/alex/Documents/pretraing_model/Inception/inception_v3/inception_v3.ckpt'
 
 
