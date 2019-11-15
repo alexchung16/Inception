@@ -22,16 +22,13 @@ class InceptionV3():
     Inception v1
     """
     def __init__(self, input_shape, num_classes, batch_size, num_samples_per_epoch, num_epoch_per_decay,
-                 decay_rate, learning_rate, keep_prob=0.8, global_pool=False, spacial_squeeze=True,
-                 reuse=tf.AUTO_REUSE):
+                 decay_rate, learning_rate, keep_prob=0.8, reuse=tf.AUTO_REUSE):
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.decay_steps = int(num_samples_per_epoch / batch_size * num_epoch_per_decay)
         self.decay_rate = decay_rate
         self.learning_rate = learning_rate
         self.keep_prob = keep_prob
-        self.global_pool = global_pool
-        self.spacial_squeeze = spacial_squeeze
         self.reuse = reuse
 
         # self.initializer = tf.random_normal_initializer(stddev=0.1)
@@ -41,8 +38,8 @@ class InceptionV3():
         self.raw_input_label = tf.compat.v1.placeholder (tf.float32, shape=[None, self.num_classes], name="class_label")
         self.is_training = tf.compat.v1.placeholder_with_default(input=False, shape=(), name='is_training')
 
-        self.global_step = tf.Variable(0, trainable=False, name="Global_Step")
-        self.epoch_step = tf.Variable(0, trainable=False, name="Epoch_Step")
+        self.global_step = tf.Variable(0, trainable=False, name="global_step")
+        self.epoch_step = tf.Variable(0, trainable=False, name="epoch_step")
 
         # logits
         self.logits =  self.inference(self.raw_input_data, scope='InceptionV3')
@@ -64,16 +61,13 @@ class InceptionV3():
         prop = self.inception_v3(inputs=inputs,
                                  num_classes=self.num_classes,
                                  keep_prob=self.keep_prob,
-                                 global_pool=self.global_pool,
-                                 spatial_squeeze=self.spacial_squeeze,
                                  reuse = self.reuse,
                                  scope=scope,
                                  is_training = self.is_training
                                  )
         return prop
 
-    def inception_v3(self, inputs, scope='InceptionV3', num_classes=10, keep_prob=0.8, global_pool=False,
-                     spatial_squeeze=True, reuse=None, is_training=False):
+    def inception_v3(self, inputs, scope='InceptionV3', num_classes=10, keep_prob=0.8, reuse=None, is_training=False):
         """
         inception v3
         :return:
