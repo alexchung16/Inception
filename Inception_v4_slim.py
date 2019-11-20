@@ -116,7 +116,6 @@ class InceptionV4():
                             prop = slim.softmax(logits=logits, scope='Softmax')
                             return prop
 
-
     def inception_v4_base(self, inputs, scope='InceptionV4'):
         """
         inception V4 base
