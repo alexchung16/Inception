@@ -119,12 +119,13 @@ if __name__ == "__main__":
                                regular_weight_decay=FLAGS.regular_weight_decay,
                                batch_norm_decay=FLAGS.batch_norm_decay,
                                batch_norm_epsilon=FLAGS.batch_norm_epsilon,
-                               batch_norm_fused=FLAGS.batch_norm_fused
+                               batch_norm_fused=FLAGS.batch_norm_fused,
+                               is_pretrain = FLAGS.is_pretrain
                                )
 
     # add scalar value to summary protocol buffer
     tf.summary.scalar('loss', inception_v3.loss)
-    tf.summary.scalar('accuracy', inception_v3.train_accuracy)
+    tf.summary.scalar('accuracy', inception_v3.accuracy)
 
     # networkStructureTest(batch_size=batch_size)
     images, labels, filenames = reader_tfrecord(record_file=FLAGS.train_dir,
@@ -180,7 +181,7 @@ if __name__ == "__main__":
                                                                 is_training=True)
 
                         _, loss_value, train_accuracy, summary = sess.run(
-                            fetches=[inception_v3.train, inception_v3.loss, inception_v3.evaluate_accuracy, summary_op],
+                            fetches=[inception_v3.train, inception_v3.loss, inception_v3.accuracy, summary_op],
                             feed_dict=feed_dict)
 
                         print('  Step {0}/{1}: loss value {2}  train accuracy {3}'
