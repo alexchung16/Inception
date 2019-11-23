@@ -574,7 +574,8 @@ class InceptionV3():
         # update moving_mean and moving_variance when training
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            train_op =  tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=globalStep)
+            train_op =  tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=globalStep,
+                                                                       var_list=trainable_variable)
         return train_op
 
     def losses(self, logits, labels, scope='Loss'):
