@@ -52,7 +52,7 @@ class InceptionV3():
         self.loss = self.losses(labels=self.raw_input_label, logits=self.logits, scope='Loss')
         # train operation
         self.train = self.training(self.learning_rate, self.global_step, loss=self.loss)
-        self.train_accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
+        self.accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
 
 
     def inference(self, inputs, scope='InceptionV3'):
@@ -124,7 +124,7 @@ class InceptionV3():
                                 net = slim.dropout(inputs=net, keep_prob=keep_prob, scope='Dropout_1b')
                                 # conv layer 1 * 1 * num_class
                                 logits = slim.conv2d(inputs=net, num_outputs=num_classes, kernel_size=[1, 1], stride=1,
-                                                     scope='Conv2d_1c_1x1')
+                                                     activation_fn=None, normalizer_fn=None, scope='Conv2d_1c_1x1')
 
                                 logits = tf.squeeze(input=logits, axis=[1, 2], name='SpatialSqueeze')
                                 prop = slim.softmax(logits=logits, scope='Softmax')
