@@ -436,7 +436,8 @@ class InceptionV4():
         # define trainable variable
         trainable_variable = None
         # trainable_scope = self.trainable_scope
-        trainable_scope = ['InceptionV4/Logits/fcn_1c', 'InceptionV4/Logits/fcn_1c']
+        # trainable_scope = ['InceptionV4/Logits/fcn_1c', 'InceptionV4/Logits/fcn_1c']
+        trainable_scope = []
         if self.is_pretrain:
             trainable_variable = []
             if trainable_scope is not None:
