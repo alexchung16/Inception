@@ -101,8 +101,7 @@ def networkStructureTest(batch_size):
         logits = sess.run(fetches=[inception_v4.logits], feed_dict=feed_dict)
         assert list(logits[0].shape) == [batch_size, FLAGS.num_classes]
 
-#
-#
+
 if __name__ == "__main__":
 
     num_samples = get_num_samples(record_file=FLAGS.train_dir)
@@ -120,7 +119,8 @@ if __name__ == "__main__":
                                batch_norm_decay=FLAGS.batch_norm_decay,
                                batch_norm_epsilon=FLAGS.batch_norm_epsilon,
                                batch_norm_fused=FLAGS.batch_norm_fused,
-                               batch_norm_scale=FLAGS.batch_norm_scale)
+                               batch_norm_scale=FLAGS.batch_norm_scale,
+                               is_pretrain=FLAGS.is_pretrain)
 
     # add scalar value to summary protocol buffer
     tf.summary.scalar('loss', inception_v4.loss)

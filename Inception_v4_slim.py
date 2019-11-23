@@ -18,13 +18,15 @@ class InceptionV4():
 
     def __init__(self, input_shape, num_classes, batch_size, num_samples_per_epoch, num_epoch_per_decay,
                  decay_rate, learning_rate, keep_prob=0.8, regular_weight_decay=0.00004, batch_norm_decay=0.9997,
-                 batch_norm_epsilon=0.001, batch_norm_scale=False,batch_norm_fused=True, reuse=tf.AUTO_REUSE):
+                 batch_norm_epsilon=0.001, batch_norm_scale=False,batch_norm_fused=True, is_pretrain=False,
+                 reuse=tf.AUTO_REUSE):
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.decay_steps = int(num_samples_per_epoch / batch_size * num_epoch_per_decay)
         self.decay_rate = decay_rate
         self.learning_rate = learning_rate
         self.keep_prob = keep_prob
+        self.is_pretrain = is_pretrain
         self.reuse = reuse
         self.regular_weight_decay = regular_weight_decay
         self.batch_norm_decay = batch_norm_decay
@@ -431,13 +433,26 @@ class InceptionV4():
         :param args:
         :return:
         """
+        # define trainable variable
+        trainable_variable = None
+        # trainable_scope = self.trainable_scope
+        trainable_scope = ['InceptionV4/Logits/fcn_1c', 'InceptionV4/Logits/fcn_1c']
+        if self.is_pretrain:
+            trainable_variable = []
+            if trainable_scope is not None:
+                for scope in trainable_scope:
+                    variables = tf.model_variables(scope=scope)
+                    [trainable_variable.append(var) for var in variables]
+            else:
+                trainable_variable = None
         learning_rate = tf.train.exponential_decay(learning_rate=learnRate, global_step=globalStep,
                                                    decay_steps=self.decay_steps, decay_rate=self.decay_rate,
                                                    staircase=False)
         # update moving_mean and moving_variance when training
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            train_op =  tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=globalStep)
+            train_op =  tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=globalStep,
+                                                                       var_list=trainable_variable)
         return train_op
 
     def losses(self, logits, labels, scope='Loss'):
