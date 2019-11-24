@@ -113,9 +113,10 @@ class InceptionV4():
                             # (, 1536)
                             net = slim.fully_connected(inputs=net, num_outputs=512, scope='fcn_1c')
                             # (, 512)
-                            logits = slim.fully_connected(inputs=net, num_outputs=num_classes, scope='Logits')
+                            logits = slim.fully_connected(inputs=net, num_outputs=num_classes, activation_fn=None,
+                                                          scope='Logits')
                             # (, num_classes)
-                            prop = slim.softmax(logits=logits, scope='Softmax')
+                            prop = slim.softmax(logits=logits, scope='Predict')
                             return prop
 
     def inception_v4_base(self, inputs, scope='InceptionV4'):
