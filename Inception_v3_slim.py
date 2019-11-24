@@ -129,7 +129,7 @@ class InceptionV3():
                                                      activation_fn=None, normalizer_fn=None, scope='Conv2d_1c_1x1')
 
                                 logits = tf.squeeze(input=logits, axis=[1, 2], name='SpatialSqueeze')
-                                prop = slim.softmax(logits=logits, scope='Softmax')
+                                prop = slim.softmax(logits=logits, scope='Predict')
 
                                 return prop
 
