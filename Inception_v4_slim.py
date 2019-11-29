@@ -92,32 +92,33 @@ class InceptionV4():
             'fused': self.batch_norm_fused,
         }
         with tf.compat.v1.variable_scope(scope, default_name='InceptionV4', values=[inputs], reuse=reuse) as scope:
-            # Set weight_decay for weights in Conv and FC layers.
-            with slim.arg_scope([slim.conv2d, slim.fully_connected],
-                                weights_regularizer=slim.l2_regularizer(self.regular_weight_decay)):
-                with slim.arg_scope(
-                        [slim.conv2d],
-                        weights_initializer=slim.variance_scaling_initializer(),
-                        activation_fn=tf.nn.relu,
-                        normalizer_fn=slim.batch_norm,
-                        normalizer_params=batch_norm_params) as sc:
-                    with slim.arg_scope([slim.conv2d, slim.avg_pool2d, slim.max_pool2d], stride=1, padding='SAME'):
-                        net = self.inception_v4_base(inputs=inputs, scope=scope)
-                        with tf.variable_scope('Logits'):
-                            # 8 x 8 x 1536
-                            kernel_size = net.get_shape()[1:3] # 8 x 8
-                            net = slim.avg_pool2d(net, kernel_size, padding='VALID', scope='AvgPool_1a')
-                            # 1 x 1 x 1536
-                            net = slim.dropout(inputs=net, keep_prob=keep_prob, scope='Dropout_1b')
-                            net = slim.flatten(inputs=net, scope='PreLogitsFlatten')
-                            # (, 1536)
-                            net = slim.fully_connected(inputs=net, num_outputs=512, scope='fcn_1c')
-                            # (, 512)
-                            logits = slim.fully_connected(inputs=net, num_outputs=num_classes, activation_fn=None,
-                                                          scope='Logits')
-                            # (, num_classes)
-                            prop = slim.softmax(logits=logits, scope='Predict')
-                            return prop
+            with slim.arg_scope([slim.batch_norm, slim.dropout], is_training=is_training):
+                # Set weight_decay for weights in Conv and FC layers.
+                with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                                    weights_regularizer=slim.l2_regularizer(self.regular_weight_decay)):
+                    with slim.arg_scope(
+                            [slim.conv2d],
+                            weights_initializer=slim.variance_scaling_initializer(),
+                            activation_fn=tf.nn.relu,
+                            normalizer_fn=slim.batch_norm,
+                            normalizer_params=batch_norm_params) as sc:
+                        with slim.arg_scope([slim.conv2d, slim.avg_pool2d, slim.max_pool2d], stride=1, padding='SAME'):
+                            net = self.inception_v4_base(inputs=inputs, scope=scope)
+                            with tf.variable_scope('Logits'):
+                                # 8 x 8 x 1536
+                                kernel_size = net.get_shape()[1:3] # 8 x 8
+                                net = slim.avg_pool2d(net, kernel_size, padding='VALID', scope='AvgPool_1a')
+                                # 1 x 1 x 1536
+                                net = slim.dropout(inputs=net, keep_prob=keep_prob, scope='Dropout_1b')
+                                net = slim.flatten(inputs=net, scope='PreLogitsFlatten')
+                                # (, 1536)
+                                net = slim.fully_connected(inputs=net, num_outputs=512, scope='fcn_1c')
+                                # (, 512)
+                                logits = slim.fully_connected(inputs=net, num_outputs=num_classes, activation_fn=None,
+                                                              scope='Logits')
+                                # (, num_classes)
+                                prop = slim.softmax(logits=logits, scope='Predict')
+                                return prop
 
     def inception_v4_base(self, inputs, scope='InceptionV4'):
         """
