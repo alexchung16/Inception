@@ -553,20 +553,16 @@ class InceptionV3():
         :param args:
         :return:
         """
-
         # define trainable variable
         trainable_variable = None
         # trainable_scope = self.trainable_scope
         # trainable_scope = ['InceptionV3/Logits/Conv2d_1c_1x1']
         trainable_scope = []
-        if self.is_pretrain:
+        if self.is_pretrain and trainable_scope:
             trainable_variable = []
-            if trainable_scope is not None:
-                for scope in trainable_scope:
-                    variables = tf.model_variables(scope=scope)
-                    [trainable_variable.append(var) for var in variables]
-            else:
-                trainable_variable = None
+            for scope in trainable_scope:
+                variables = tf.model_variables(scope=scope)
+                [trainable_variable.append(var) for var in variables]
 
         learning_rate = tf.train.exponential_decay(learning_rate=learnRate, global_step=globalStep,
                                                    decay_steps=self.decay_steps, decay_rate=self.decay_rate,
@@ -575,8 +571,8 @@ class InceptionV3():
         # update moving_mean and moving_variance when training
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            train_op =  tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=globalStep,
-                                                                       var_list=trainable_variable)
+            train_op = tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=globalStep,
+                                                                      var_list=trainable_variable)
         return train_op
 
     def losses(self, logits, labels, scope='Loss'):
