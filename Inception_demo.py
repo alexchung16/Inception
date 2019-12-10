@@ -24,12 +24,10 @@ with slim.arg_scope(inception_v3.inception_v3_arg_scope()):
 
 if __name__ == "__main__":
 
-
+    init = tf.group(tf.global_variables_initializer(),
+                    tf.local_variables_initializer())
     with tf.Session() as sess:
         # images, class_num = sess.run([images, class_num])
-
-        init = tf.group(tf.global_variables_initializer(),
-                        tf.local_variables_initializer())
         sess.run(init)
         for var in tf.model_variables():
             print(var.name)

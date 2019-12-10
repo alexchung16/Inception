@@ -184,7 +184,7 @@ if __name__ == "__main__":
                             fetches=[inception_v3.train, inception_v3.loss, inception_v3.accuracy, summary_op],
                             feed_dict=feed_dict)
 
-                        print('  Step {0}/{1}: loss value {2}  train accuracy {3}'
+                        print('  : loss value {2}  train accuracy {3}'
                               .format(step, FLAGS.step_per_epoch, loss_value, train_accuracy))
 
                         write.add_summary(summary=summary, global_step=epoch*FLAGS.step_per_epoch+step)
