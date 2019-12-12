@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from Inception.Inception_v1 import InceptionV1
 import numpy as np
-from TFRecordProcessing.parse_TFRecord import read_tfrecord
+from DataProcess.read_TFRecord import read_tfrecord
 from tensorflow.python.framework import graph_util
 
 original_dataset_dir = '/home/alex/Documents/datasets/dogs_and_cat_separate'
