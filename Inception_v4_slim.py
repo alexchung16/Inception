@@ -35,9 +35,9 @@ class InceptionV4():
         self.batch_norm_fused = batch_norm_fused
         # self.initializer = tf.random_normal_initializer(stddev=0.1)
         # add placeholder (X,label)
-        self.raw_input_data = tf.compat.v1.placeholder(tf.float32,
-                                                       shape=[None, input_shape[0], input_shape[1], input_shape[2]],
-                                                       name="input_images")
+        self.raw_input_data = tf.compat.v1.placeholder(tf.float32, shape=[None, input_shape[0], input_shape[1],
+                                                                          input_shape[2]], name="input_images")
+        self.raw_input_data = self.convert_scale(image=self.raw_input_data)
         # y [None,num_classes]
         self.raw_input_label = tf.compat.v1.placeholder(tf.float32, shape=[None, self.num_classes], name="class_label")
         self.is_training = tf.compat.v1.placeholder_with_default(input=False, shape=(), name='is_training')
@@ -52,7 +52,6 @@ class InceptionV4():
         # train operation
         self.train = self.training(self.learning_rate, self.global_step, loss=self.loss)
         self.train_accuracy = self.evaluate_batch(self.logits, self.raw_input_label) / batch_size
-
 
     def inference(self, inputs, scope='InceptionV4'):
         """
@@ -486,3 +485,17 @@ class InceptionV4():
             self.is_training: is_training
         }
         return feed_dict
+
+    def convert_scale(self, image):
+        """
+        convert image pixel size number to [-1, 1]
+        :param image:
+        :return:
+        """
+        # [0, 255]=>[0, 1]
+        image = tf.multiply(tf.cast(image, dtype=tf.float32), 1./255)
+        # [0, 1] => [-0.5, 0.5]
+        image = tf.subtract(image, 0.5)
+        # [-0.5, 0.5] => [-1.0, 1.0]
+        image = tf.multiply(image, 2.0)
+        return image
