@@ -10,7 +10,7 @@ import os
 import numpy as np
 import tensorflow as tf
 # from Inception.Inception_v3 import InceptionV3
-from Inception.Inception_v4_slim import InceptionV4
+from InceptionV4.Inception_v4_slim import InceptionV4
 from DataProcess.read_TFRecord import reader_tfrecord, get_num_samples
 from tensorflow.python.framework import graph_util
 #

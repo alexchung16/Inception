@@ -10,7 +10,7 @@ import os
 import cv2 as cv
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from Inception.Inception_v1 import InceptionV1
+from GoogLeNet.Inception_v1 import InceptionV1
 import numpy as np
 from DataProcess.read_TFRecord import reader_tfrecord
 from tensorflow.python.framework import graph_util
