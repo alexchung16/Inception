@@ -65,7 +65,6 @@ class InceptionV3():
         :param scope:
         :return:
         """
-        self.prameter = []
         prop = self.inception_v3(inputs=inputs,
                                  num_classes=self.num_classes,
                                  keep_prob=self.keep_prob,
